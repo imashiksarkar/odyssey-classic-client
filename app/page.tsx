@@ -17,7 +17,7 @@ export default function Home() {
     });
   }, []);
 
-  const url = `${process.env.NEXT_PUBLIC_SSO_CLIENT_URL}/sso?client_id=${process.env.NEXT_PUBLIC_CLASSIC_CLIENT_ID}&redirect_uri=http://localhost:5010/sso`;
+  const url = `${process.env.NEXT_PUBLIC_SSO_CLIENT_URL}/sso?client_id=${process.env.NEXT_PUBLIC_CLASSIC_CLIENT_ID}&redirect_uri=https://odyssey-classic-client.vercel.app/sso`;
 
   return !user ? (
     <nav>

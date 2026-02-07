@@ -4,7 +4,7 @@ import apiClient from "@/lib/axios";
 
 export const exchange = async (token: string) => {
   try {
-    const { data } = await apiClient.post("sso/exchange", {
+    const { data } = await apiClient.post("/sso/exchange", {
       token,
       clientSecret: process.env.CLASSIC_CLIENT_SECRET,
     });
