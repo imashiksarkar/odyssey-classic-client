@@ -1,0 +1,11 @@
+Model Information:
+* title:	Male Face
+* source:	https://sketchfab.com/3d-models/male-face-f032638713f54e6bace311ae911bd663
+* author:	Rui Barbosa (https://sketchfab.com/ruibarbosa.art)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Male Face" (https://sketchfab.com/3d-models/male-face-f032638713f54e6bace311ae911bd663) by Rui Barbosa (https://sketchfab.com/ruibarbosa.art) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
