@@ -63,7 +63,7 @@ export default function SketchFab() {
           </Bounds>
         </Suspense>
 
-        <OrbitControls makeDefault />
+        <OrbitControls makeDefault enableZoom={false} />
       </Canvas>
     </>
   );
