@@ -1,21 +1,17 @@
 "use server";
 
 import apiClient from "@/lib/axios";
+import sso from "../lib/sso";
 
 export const exchange = async (token: string) => {
-  try {
-    const { data } = await apiClient.post("/sso/exchange", {
-      token,
-      clientSecret: process.env.CLASSIC_CLIENT_SECRET,
-    });
+  const { isSuccess, data } = await sso.exchangeCode(
+    token,
+    process.env.CLASSIC_CLIENT_SECRET, // todo: can be omitted once sso is modified
+  );
 
-    return {
-      data: data.data.tokens,
-    };
-  } catch (error) {
-    console.log(error);
-    return { data: null };
-  }
+  if (isSuccess) return data!;
+
+  throw new Error("SSO exchange failed");
 };
 
 export const getUserProfile = async (accessToken: string) => {

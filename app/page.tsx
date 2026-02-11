@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getUserProfile } from "./actions";
+import sso from "../lib/sso";
 
 export default function Home() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,13 +17,15 @@ export default function Home() {
     });
   }, []);
 
-  const url = `${process.env.NEXT_PUBLIC_SSO_CLIENT_URL}/sso?client_id=${process.env.NEXT_PUBLIC_CLASSIC_CLIENT_ID}&redirect_uri=https://odyssey-classic-client.vercel.app/sso`;
+  const handleSignin = () => {
+    sso.triggerSignIn("http://localhost:5010/sso");
+  };
 
   return !user ? (
     <nav>
       <ul>
         <li>
-          <Link href={url}>Signin</Link>
+          <button onClick={handleSignin}>Signin</button>
         </li>
       </ul>
     </nav>

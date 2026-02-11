@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@avaturn/sdk": "^1.1.4",
+    "@newgameplusinc/odyssey-sso": "file:../odyssey-sso-sdk/newgameplusinc-odyssey-sso-0.1.0.tgz",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "axios": "^1.13.4",
