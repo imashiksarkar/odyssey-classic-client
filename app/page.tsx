@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUserProfile } from "./actions";
 import sso from "../lib/sso";
 
 export default function Home() {
@@ -9,16 +8,11 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    const accessToken = localStorage.getItem("accessToken");
-    if (!accessToken) return;
-
-    getUserProfile(accessToken).then((res) => {
-      setUser(res);
-    });
+    sso?.getProfileData().then(setUser);
   }, []);
 
   const handleSignin = () => {
-    sso.triggerSignIn("http://localhost:5010/sso");
+    sso?.triggerSignIn("http://localhost:5010/sso");
   };
 
   return !user ? (
@@ -35,8 +29,7 @@ export default function Home() {
       <br />
       <button
         onClick={() => {
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("refreshToken");
+          sso?.logout()
           window.location.href = "/";
         }}
       >
