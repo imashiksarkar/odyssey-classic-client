@@ -27,6 +27,18 @@ export default function Home() {
     <div>
       {JSON.stringify(user)}
       <br />
+      <br />
+      <br />
+      <button
+        onClick={async() => {
+          await sso?.refreshToken()
+        }}
+      >
+        Refresh Token
+      </button>
+      <br />
+      <br />
+      <br />
       <button
         onClick={() => {
           sso?.logout()
