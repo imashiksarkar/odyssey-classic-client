@@ -58,7 +58,7 @@ const Home = () => {
 
   const redirectUrl =
     process.env.NEXT_PUBLIC_SSO_CLIENT_URL &&
-    `${process.env.NEXT_PUBLIC_SSO_CLIENT_URL}?sdkKey=${host}&redirectUri=${host}`;
+    `${process.env.NEXT_PUBLIC_SSO_CLIENT_URL}/sso?sdkKey=${host}&redirectUri=${host}`;
 
   const [user, setUser] = useState<null | Profile>();
 
