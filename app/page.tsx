@@ -51,6 +51,11 @@ interface Profile {
 const Home = () => {
   const searchParams = useSearchParams();
 
+  const [host] = useState(() => {
+    if (typeof window === "undefined") return null;
+    return window.location.host;
+  });
+
   const [user, setUser] = useState<null | Profile>();
 
   const handleLogout = () => {
@@ -75,7 +80,7 @@ const Home = () => {
   useEffect(() => {
     const token = searchParams.get("token");
 
-    if (!token) return;
+    if (!token || !host) return;
 
     db.open()
       .then(async () => {
@@ -86,7 +91,7 @@ const Home = () => {
         const res = await apiClient
           .post("/sso/exchange", {
             token,
-            sdkKey: "",
+            sdkKey: host,
           })
           .catch((error) => console.log(error.response.data));
 
@@ -103,7 +108,7 @@ const Home = () => {
         url.searchParams.delete("token");
         window.history.replaceState({}, "", url);
       });
-  }, [searchParams]);
+  }, [searchParams, host]);
 
   // fetch profile
   useEffect(() => {
