@@ -56,6 +56,10 @@ const Home = () => {
     return window.location.host;
   });
 
+  const redirectUrl =
+    process.env.NEXT_PUBLIC_SSO_CLIENT_URL &&
+    `${process.env.NEXT_PUBLIC_SSO_CLIENT_URL}?sdkKey=${host}&redirectUri=${host}`;
+
   const [user, setUser] = useState<null | Profile>();
 
   const handleLogout = () => {
@@ -158,7 +162,10 @@ const Home = () => {
               Logout
             </Button>
           ) : user === null ? (
-            <Link href="/signin">
+            <Link
+              href={redirectUrl ?? "#"}
+              className={!redirectUrl ? "disabled" : ""}
+            >
               <Button size="sm" className="cursor-pointer">
                 Signin
               </Button>
