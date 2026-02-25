@@ -53,7 +53,8 @@ const Home = () => {
 
   const [host] = useState(() => {
     if (typeof window === "undefined") return null;
-    return window.location.host;
+
+    return window.location.origin;
   });
 
   const redirectUrl =
