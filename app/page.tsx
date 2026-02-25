@@ -94,7 +94,7 @@ const Home = () => {
         if (data) return;
 
         const res = await apiClient
-          .post("sso/exchange", {
+          .post("/sso/exchange", {
             token,
             sdkKey: host,
           })
