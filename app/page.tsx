@@ -50,6 +50,7 @@ interface Profile {
 
 const Home = () => {
   const searchParams = useSearchParams();
+  const [focus, setFocus] = useState(0);
 
   const [host] = useState(() => {
     if (typeof window === "undefined") return null;
@@ -133,7 +134,16 @@ const Home = () => {
         .then((res) => setUser(res.data.data))
         .catch(() => setUser(null));
     });
-  }, [searchParams]);
+  }, [searchParams, focus]);
+
+  // update on focus
+  useEffect(() => {
+    const focusHandler = () => setFocus(Math.random());
+
+    window.addEventListener("focus", focusHandler);
+
+    return () => window.removeEventListener("focus", focusHandler);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
