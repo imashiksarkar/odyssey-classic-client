@@ -1,149 +1,26 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import apiClient from "@/lib/axios";
+import sso from "@/config/sso";
 import { CheckCircle2, LogOut } from "lucide-react";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import db from "@/config/db.config";
-
-export interface Data {
-  id: string;
-  userId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  photoURL: null;
-  pending: boolean;
-  anonymous: boolean;
-  deviceId: string;
-  tokens: {
-    accessToken: string;
-    refreshToken: string;
-  };
-}
-
-interface Profile {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  photoURL: null;
-  pending: boolean;
-  anonymous: boolean;
-  bodyHeight: null;
-  bodyShape: null;
-  clothingIdBottom: null;
-  clothingIdShoes: null;
-  clothingIdTop: null;
-  clothingIdMaterial: null;
-  skullId: null;
-  additionalInfo: null;
-  skull: null;
-  clothingTop: null;
-  clothingBottom: null;
-  clothingShoes: null;
-  clothingMaterial: null;
-  deviceId: string;
-}
+import { use, useEffect, useState } from "react";
+import { AuthContext } from "./auth-wrapper";
 
 const Home = () => {
-  const searchParams = useSearchParams();
   const [focus, setFocus] = useState(0);
 
-  const [host] = useState(() => {
-    if (typeof window === "undefined") return null;
+  const { user } = use(AuthContext);
 
-    return window.location.origin;
-  });
-
-  const redirectUrl =
-    process.env.NEXT_PUBLIC_SSO_CLIENT_URL &&
-    `${process.env.NEXT_PUBLIC_SSO_CLIENT_URL}/sso?sdkKey=${host}&redirectUri=${host}`;
-
-  const [user, setUser] = useState<null | Profile>();
-
-  const handleLogout = () => {
-    db.open().then(() => {
-      db.getById<Data>("local-user").then((data) => {
-        if (!data) return;
-
-        apiClient
-          .delete("/users/logout", {
-            headers: {
-              Authorization: `Bearer ${data.tokens.accessToken}`,
-            },
-          })
-          .then(async () => {
-            await db.delete("local-user");
-            setUser(null);
-          });
-      });
-    });
-  };
-
-  useEffect(() => {
-    const token = searchParams.get("token");
-
-    if (!token || !host) return;
-
-    db.open()
-      .then(async () => {
-        const data = await db.getById<Data>("local-user");
-
-        if (data) return;
-
-        const res = await apiClient
-          .post("/sso/exchange", {
-            token,
-            sdkKey: host,
-          })
-          .catch((error) => console.log(error.response.data));
-
-        if (!res) return;
-
-        await db.create({
-          ...res.data.data,
-          id: "local-user",
-          userId: res.data.data.id,
-        });
-      })
-      .finally(() => {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("token");
-        window.history.replaceState({}, "", url);
-      });
-  }, [searchParams, host]);
-
-  // fetch profile
-  useEffect(() => {
-    db.open().then(async () => {
-      const data = await db.getById<Data>("local-user");
-      if (!data) {
-        setUser(null);
-        return;
-      }
-
-      await apiClient
-        .get("/users/profile", {
-          headers: {
-            Authorization: `Bearer ${data?.tokens.accessToken}`,
-          },
-        })
-        .then((res) => setUser(res.data.data))
-        .catch(() => setUser(null));
-    });
-  }, [searchParams, focus]);
-
-  // update on focus
   useEffect(() => {
     const focusHandler = () => setFocus(Math.random());
-
     window.addEventListener("focus", focusHandler);
 
     return () => window.removeEventListener("focus", focusHandler);
   }, []);
+
+  useEffect(() => {
+    sso.fetchProfile();
+  }, [focus]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -167,21 +44,20 @@ const Home = () => {
               variant="destructive"
               size="sm"
               className="gap-2 cursor-pointer"
-              onClick={handleLogout}
+              onClick={sso.logout}
             >
               <LogOut className="w-4 h-4" />
               Logout
             </Button>
-          ) : user === null ? (
-            <Link
-              href={redirectUrl ?? "#"}
-              className={!redirectUrl ? "disabled" : ""}
+          ) : (
+            <Button
+              onClick={() => sso.login(window.location.origin)}
+              size="sm"
+              className="cursor-pointer"
             >
-              <Button size="sm" className="cursor-pointer">
-                Signin
-              </Button>
-            </Link>
-          ) : null}
+              Signin
+            </Button>
+          )}
         </div>
       </header>
 
