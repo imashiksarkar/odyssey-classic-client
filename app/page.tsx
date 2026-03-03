@@ -160,6 +160,11 @@ const Home = () => {
             <span className="font-semibold text-foreground hidden sm:inline">
               Odyssey
             </span>
+            <Link href="/AssetManager">
+              <Button variant="outline" size="sm">
+                Asset Manager
+              </Button>
+            </Link>
           </div>
 
           {user ? (
