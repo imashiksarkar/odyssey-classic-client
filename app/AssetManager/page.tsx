@@ -187,12 +187,12 @@ export default function AssetManagerPage() {
               <div
                 className={`h-full rounded-full transition-all duration-300 ${
                   state.status === "failed"
-                    ? "bg-destructive"
+                    ? "bg-zinc-400"
                     : state.status === "completed"
-                      ? "bg-green-500"
-                      : "bg-accent"
+                      ? "bg-white"
+                      : "bg-black"
                 }`}
-                style={{ width: `${progress}%` }}
+                style={{ width: `${Math.max(progress, 1)}%` }}
               />
             </div>
             <p className="text-xs text-muted-foreground text-center">
