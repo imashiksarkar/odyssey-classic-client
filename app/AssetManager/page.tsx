@@ -61,7 +61,7 @@ const STATUS_CONFIG: Record<
   },
 };
 
-// ─── Animated pulsing dot ────────────────────────────────────────────────────
+
 function PulseDot({ color }: { color: string }) {
   return (
     <span className="relative flex h-2.5 w-2.5">
