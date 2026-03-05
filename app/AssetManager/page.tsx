@@ -13,7 +13,6 @@ import {
   type ProjectStatus,
 } from "@/lib/upload";
 
-// ─── Status color config ────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<
   ProjectStatus,
   { bar: string; badge: string; dot: string; label: string }
