@@ -50,19 +50,16 @@ export const useFileUpload = () => {
         let uploadUrl = activeState.uploadUrl;
         let assetId = activeState.assetId;
         let versionId = activeState.assetVersionId;
+        let orgId = activeState.orgId;
 
-        // Will be set during initiate if needed
-        let orgId = uploadStorage.getOrgId();
-
-        if (!uploadUrl || !assetId || !versionId) {
+        if (!uploadUrl || !assetId || !versionId || !orgId) {
           const formSnapshot = formDataRef.current;
           const initiated = await uploadApi.initiate(activeFile, formSnapshot);
           uploadUrl = initiated.uploadUrl;
           assetId = initiated.assetId;
           versionId = initiated.assetVersionId;
           orgId = initiated.orgId;
-          uploadStorage.setOrgId(orgId);
-          patchState({ assetId, assetVersionId: versionId, uploadUrl });
+          patchState({ orgId, assetId, assetVersionId: versionId, uploadUrl });
         }
 
         if (!uploadUrl || !assetId || !versionId || !orgId) {
@@ -112,7 +109,7 @@ export const useFileUpload = () => {
             }
 
             if (res.status === 308) {
-              const range = res.headers["range"];
+              const range = res.headers.get("range");
               if (range) {
                 const match = range.match(/bytes=0-(\d+)/);
                 if (match) {
@@ -151,14 +148,13 @@ export const useFileUpload = () => {
     [file, state, patchState],
   );
 
-  // Store formData in ref so performUpload always gets fresh values
   const formDataRef = useRef<UploadFormData>({
-    assetType: "OTHER_3D",
+    assetType: "UNREAL_PROJECT",
     displayName: "",
     unrealEngineVersion: "5.2.1",
     target: "Development",
-    volumeRegions: [],
-    selfPackaged: false,
+    selfPackaged: true,
+    volumeRegions: ["ORD1", "LGA1", "LAS1"],
   });
 
   const [formData, setFormDataState] = useState<UploadFormData>(
@@ -192,7 +188,7 @@ export const useFileUpload = () => {
 
   const handleAbort = async () => {
     controlRef.current.shouldStop = true;
-    const orgId = uploadStorage.getOrgId();
+    const orgId = state.orgId; // ✅ read from state
     if (!orgId || !state.assetId || !state.assetVersionId) return;
 
     try {
