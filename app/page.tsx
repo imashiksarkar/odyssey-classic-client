@@ -5,6 +5,7 @@ import sso from "@/config/sso";
 import { CheckCircle2, LogOut } from "lucide-react";
 import { use, useEffect, useState } from "react";
 import { AuthContext } from "./auth-wrapper";
+import Link from "next/link";
 
 const Home = () => {
   const [focus, setFocus] = useState(0);
