@@ -1,6 +1,6 @@
 COMMIT_MSG=$(cat "$1")
 
-if [[ ! "$COMMIT_MSG" =~ ^"ODY2-110 --"  ]]; then
-  echo "❌ Commit message must start with 'ODY2-110 -- '"
+if [[ ! "$COMMIT_MSG" =~ ^ODY2-[0-9]+[[:space:]]--[[:space:]] ]]; then
+  echo "❌ Commit message must start with 'ODY-[number] -- '"
   exit 1
 fi
