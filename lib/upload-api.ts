@@ -131,7 +131,7 @@ export const uploadApi = {
     assetVersionId: string,
   ): Promise<ProjectVersionInfo> => {
     const res = await axios.get(
-      `${API_BASE}/assets/unrealProjectVersion/${assetVersionId}`,
+      `${API_BASE}/unrealProjectVersion/${assetVersionId}`,
     );
     return res.data.data;
   },

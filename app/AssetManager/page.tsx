@@ -61,7 +61,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-
 function PulseDot({ color }: { color: string }) {
   return (
     <span className="relative flex h-2.5 w-2.5">
@@ -91,6 +90,10 @@ function ProjectStatusCard({ versionId }: { versionId: string }) {
     const poll = async () => {
       try {
         const data = await uploadApi.getProjectVersion(versionId);
+        console.log(
+          "ProjectVersion API response:",
+          JSON.stringify(data, null, 2),
+        );
         setInfo(data);
         if (isDone(data.state)) {
           if (intervalRef.current) clearInterval(intervalRef.current);
