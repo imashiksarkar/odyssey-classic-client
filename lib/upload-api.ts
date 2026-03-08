@@ -25,6 +25,7 @@ export const uploadApi = {
       assetType: formData.assetType,
       assetFilename: file.name,
       unrealProjectDisplayName: formData.displayName || file.name,
+      requestOrigin: window.location.origin,
     };
 
     if (formData.assetType === "UNREAL_PROJECT") {
@@ -35,7 +36,7 @@ export const uploadApi = {
     }
 
     const res = await axios.post(`${API_BASE}/uploader/initiate`, body);
-    // backend wraps response in { data, message, statusCode, success }
+
     return res.data.data;
   },
 
