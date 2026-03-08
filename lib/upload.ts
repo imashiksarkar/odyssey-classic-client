@@ -1,4 +1,13 @@
-export const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB
+export const getChunkSize = (fileSizeBytes: number): number => {
+  const GB = 1024 * 1024 * 1024;
+  const MB = 1024 * 1024;
+
+  if (fileSizeBytes < 100 * MB) return 16 * MB; // < 100MB  → 16MB chunks
+  if (fileSizeBytes < 500 * MB) return 32 * MB; // < 500MB  → 32MB chunks
+  if (fileSizeBytes < 1 * GB) return 64 * MB; // < 1GB    → 64MB chunks
+  if (fileSizeBytes < 5 * GB) return 128 * MB; // < 5GB    → 128MB chunks
+  return 256 * MB; // >= 5GB   → 256MB chunks
+};
 
 export type UploadStatus =
   | "idle"
