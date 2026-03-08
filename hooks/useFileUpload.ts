@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import * as crypto from "crypto-js";
 import { AxiosError } from "axios";
 import { uploadApi } from "@/lib/upload-api";
 import { uploadStorage } from "@/lib/upload-storage";
 import {
-  CHUNK_SIZE,
   INITIAL_UPLOAD_STATE,
   type UploadState,
   type UploadFormData,
+  getChunkSize,
 } from "@/lib/upload";
 
 export const useFileUpload = () => {
@@ -34,8 +33,9 @@ export const useFileUpload = () => {
 
   const computeSha256 = async (blob: Blob): Promise<string> => {
     const buf = await blob.arrayBuffer();
-    const wordArray = crypto.lib.WordArray.create(buf);
-    return crypto.SHA256(wordArray).toString();
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", buf);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   };
 
   const performUpload = useCallback(
@@ -77,7 +77,8 @@ export const useFileUpload = () => {
           !controlRef.current.shouldStop
         ) {
           const start = uploadedBytes;
-          const end = Math.min(start + CHUNK_SIZE, activeFile.size);
+          const chunkSize = getChunkSize(activeFile.size);
+          const end = Math.min(start + chunkSize, activeFile.size);
           const chunk = activeFile.slice(start, end);
           const sha256 = await computeSha256(chunk);
 
