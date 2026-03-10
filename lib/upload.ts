@@ -1,13 +1,15 @@
-export const getChunkSize = (fileSizeBytes: number): number => {
-  const GB = 1024 * 1024 * 1024;
-  const MB = 1024 * 1024;
+// export const getChunkSize = (fileSizeBytes: number): number => {
+//   const GB = 1024 * 1024 * 1024;
+//   const MB = 1024 * 1024;
 
-  if (fileSizeBytes < 100 * MB) return 16 * MB; // < 100MB  → 16MB chunks
-  if (fileSizeBytes < 500 * MB) return 32 * MB; // < 500MB  → 32MB chunks
-  if (fileSizeBytes < 1 * GB) return 64 * MB; // < 1GB    → 64MB chunks
-  if (fileSizeBytes < 5 * GB) return 128 * MB; // < 5GB    → 128MB chunks
-  return 256 * MB; // >= 5GB   → 256MB chunks
-};
+//   if (fileSizeBytes < 100 * MB) return 8 * MB; // < 100MB  → 16MB chunks
+//   if (fileSizeBytes < 500 * MB) return 16 * MB; // < 500MB  → 32MB chunks
+//   if (fileSizeBytes < 1 * GB) return 32 * MB; // < 1GB    → 64MB chunks
+//   if (fileSizeBytes < 5 * GB) return 64 * MB; // < 5GB    → 128MB chunks
+//   return 128 * MB; // >= 5GB   → 256MB chunks
+// };
+
+export const CHUNK_SIZE = 8 * 1024 * 1024;
 
 export type UploadStatus =
   | "idle"
@@ -29,11 +31,15 @@ export interface UploadState {
   status: UploadStatus;
   uploadedBytes: number;
   totalBytes: number;
-  uploadUrl: string | null;
+  uploadId: string | null;
+  objectName: string | null;
   orgId: string | null;
   assetId: string | null;
   assetVersionId: string | null;
+  completedParts: { partNumber: number; etag: string }[];
+  createdAt: number | null;
   error: string | null;
+  fileName: string | null;
 }
 
 export interface UploadFormData {
@@ -46,11 +52,19 @@ export interface UploadFormData {
 }
 
 export interface InitResponse {
-  uploadUrl: string;
+  uploadId: string;
+  objectName: string;
   assetId: string;
   assetVersionId: string;
   orgId: string;
 }
+
+export const UPLOAD_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+export const isUploadExpired = (createdAt: number | null): boolean => {
+  if (!createdAt) return true;
+  return Date.now() - createdAt > UPLOAD_EXPIRY_MS;
+};
 
 export interface ProjectVersionInfo {
   id: string;
@@ -69,11 +83,15 @@ export const INITIAL_UPLOAD_STATE: UploadState = {
   status: "idle",
   uploadedBytes: 0,
   totalBytes: 0,
-  uploadUrl: null,
+  uploadId: null,
+  objectName: null,
   orgId: null,
   assetId: null,
   assetVersionId: null,
+  completedParts: [],
+  createdAt: null,
   error: null,
+  fileName: null,
 };
 
 export function mapStateToStatus(state: string): ProjectStatus {
