@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import * as crypto from "crypto-js";
-import { AxiosError } from "axios";
 import { uploadApi } from "@/lib/upload-api";
 import { uploadStorage } from "@/lib/upload-storage";
 import {
-  CHUNK_SIZE,
   INITIAL_UPLOAD_STATE,
+  isUploadExpired,
   type UploadState,
   type UploadFormData,
+  CHUNK_SIZE,
 } from "@/lib/upload";
+
+const MAX_WORKERS = 5;
+const MAX_RETRIES = 3;
 
 export const useFileUpload = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -29,15 +31,22 @@ export const useFileUpload = () => {
     const selected = e.target.files?.[0];
     if (!selected) return;
     setFile(selected);
-    patchState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
-  };
 
-  const computeSha256 = async (blob: Blob): Promise<string> => {
-    const buf = await blob.arrayBuffer();
-    const wordArray = crypto.lib.WordArray.create(buf);
-    return crypto.SHA256(wordArray).toString();
+    const saved = uploadStorage.getState();
+    if (
+      saved &&
+      saved.assetId &&
+      saved.status === "paused" &&
+      !isUploadExpired(saved.createdAt) &&
+      saved.fileName === selected.name // match by filename
+    ) {
+      // Offer resume — don't auto-start, just restore state
+      setState({ ...saved, totalBytes: selected.size });
+    } else {
+      uploadStorage.clearAll();
+      patchState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
+    }
   };
-
   const performUpload = useCallback(
     async (fileOverride?: File, stateOverride?: UploadState) => {
       const activeFile = fileOverride ?? file;
@@ -47,99 +56,141 @@ export const useFileUpload = () => {
       controlRef.current.shouldStop = false;
 
       try {
-        let uploadUrl = activeState.uploadUrl;
+        let uploadId = activeState.uploadId;
+        let objectName = activeState.objectName;
         let assetId = activeState.assetId;
         let versionId = activeState.assetVersionId;
         let orgId = activeState.orgId;
+        let completedParts = activeState.completedParts ?? [];
 
-        if (!uploadUrl || !assetId || !versionId || !orgId) {
-          const formSnapshot = formDataRef.current;
-          const initiated = await uploadApi.initiate(activeFile, formSnapshot);
-          uploadUrl = initiated.uploadUrl;
+        // Initiate if no saved session or expired
+        if (
+          !uploadId ||
+          !assetId ||
+          !versionId ||
+          !orgId ||
+          isUploadExpired(activeState.createdAt)
+        ) {
+          const initiated = await uploadApi.initiate(
+            activeFile,
+            formDataRef.current,
+          );
+          uploadId = initiated.uploadId;
+          objectName = initiated.objectName;
           assetId = initiated.assetId;
           versionId = initiated.assetVersionId;
           orgId = initiated.orgId;
-          patchState({ orgId, assetId, assetVersionId: versionId, uploadUrl });
+          completedParts = [];
+          patchState({
+            orgId,
+            assetId,
+            assetVersionId: versionId,
+            uploadId,
+            objectName,
+            completedParts: [],
+            createdAt: Date.now(),
+            fileName: activeFile.name,
+            status: "uploading",
+          });
         }
 
-        if (!uploadUrl || !assetId || !versionId || !orgId) {
+        if (!uploadId || !objectName || !assetId || !versionId || !orgId) {
           throw new Error("Upload session could not be established");
         }
 
-        let uploadedBytes = await uploadApi.queryGCSOffset(
-          uploadUrl,
-          activeFile.size,
+        // Build part queue
+        const chunkSize = CHUNK_SIZE;
+        const totalParts = Math.ceil(activeFile.size / chunkSize);
+        const completedPartNumbers = new Set(
+          completedParts.map((p) => p.partNumber),
         );
-        patchState({ uploadedBytes, status: "uploading" });
-
-        while (
-          uploadedBytes < activeFile.size &&
-          !controlRef.current.shouldStop
-        ) {
-          const start = uploadedBytes;
-          const end = Math.min(start + CHUNK_SIZE, activeFile.size);
-          const chunk = activeFile.slice(start, end);
-          const sha256 = await computeSha256(chunk);
-
-          try {
-            const res = await uploadApi.uploadChunk(
-              uploadUrl,
-              chunk,
-              start,
-              end,
-              activeFile.size,
-              sha256,
-            );
-
-            if (res.status === 200 || res.status === 201) {
-              patchState({
-                uploadedBytes: activeFile.size,
-                status: "completed",
-              });
-              const fullSha = await computeSha256(activeFile);
-              await uploadApi.complete(
-                formDataRef.current.assetType,
-                orgId,
-                assetId,
-                versionId,
-                fullSha,
-              );
-              uploadStorage.clearAll();
-              return;
-            }
-
-            if (res.status === 308) {
-              const range = res.headers.get("range");
-              if (range) {
-                const match = range.match(/bytes=0-(\d+)/);
-                if (match) {
-                  uploadedBytes = parseInt(match[1]) + 1;
-                } else {
-                  uploadedBytes = end;
-                }
-              } else {
-                uploadedBytes = end;
-              }
-              patchState({ uploadedBytes });
-            }
-          } catch (err) {
-            if (err instanceof AxiosError && err.response?.status === 410) {
-              uploadUrl = await uploadApi.resume(
-                formDataRef.current.assetType,
-                orgId,
-                assetId,
-                versionId,
-              );
-              patchState({ uploadUrl });
-              continue;
-            }
-            throw err;
-          }
+        const queue: number[] = [];
+        for (let i = 1; i <= totalParts; i++) {
+          if (!completedPartNumbers.has(i)) queue.push(i);
         }
+
+        patchState({ status: "uploading" });
+
+        // Worker function
+        const uploadPart = async (partNumber: number): Promise<void> => {
+          const start = (partNumber - 1) * chunkSize;
+          const end = Math.min(start + chunkSize, activeFile.size);
+          const chunk = activeFile.slice(start, end);
+
+          let attempts = 0;
+          while (attempts < MAX_RETRIES) {
+            try {
+              const signedUrl = await uploadApi.getSignedUrl(
+                orgId!,
+                assetId!,
+                versionId!,
+                uploadId!,
+                objectName!,
+                partNumber,
+              );
+
+              const etag = await uploadApi.uploadPart(signedUrl, chunk);
+
+              // Save completed part
+              completedParts = [...completedParts, { partNumber, etag }];
+              patchState({
+                completedParts,
+                uploadedBytes: completedParts.length * chunkSize,
+              });
+              return;
+            } catch (err) {
+              attempts++;
+              if (attempts >= MAX_RETRIES) throw err;
+              // Wait before retry — exponential backoff
+              await new Promise((r) => setTimeout(r, 1000 * attempts));
+            }
+          }
+        };
+
+        // Concurrency pool — max 5 workers
+        const runPool = async (): Promise<void> => {
+          let index = 0;
+
+          const worker = async (): Promise<void> => {
+            while (true) {
+              const i = index++;
+              if (i >= queue.length) return;
+              if (controlRef.current.shouldStop) return;
+              await uploadPart(queue[i]);
+            }
+          };
+
+          const workers = Array.from(
+            { length: Math.min(MAX_WORKERS, queue.length) },
+            () => worker(),
+          );
+          await Promise.all(workers);
+        };
+
+        await runPool();
 
         if (controlRef.current.shouldStop) {
           patchState({ status: "paused" });
+          return;
         }
+
+        // All parts done — complete upload
+        const sortedParts = [...completedParts].sort(
+          (a, b) => a.partNumber - b.partNumber,
+        );
+
+        await uploadApi.complete(
+          formDataRef.current.assetType,
+          orgId,
+          assetId,
+          versionId,
+          uploadId,
+          objectName,
+          sortedParts,
+        );
+
+        patchState({ uploadedBytes: activeFile.size, status: "completed" });
+        uploadStorage.clearAll();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         patchState({ status: "failed", error: message });
@@ -178,7 +229,12 @@ export const useFileUpload = () => {
 
   const handleResume = () => {
     const saved = uploadStorage.getState();
-    if (saved) performUpload(file ?? undefined, saved);
+    if (saved && !isUploadExpired(saved.createdAt)) {
+      performUpload(file ?? undefined, saved);
+    } else {
+      uploadStorage.clearAll();
+      patchState(INITIAL_UPLOAD_STATE);
+    }
   };
 
   const handleRetry = () => {
@@ -188,15 +244,18 @@ export const useFileUpload = () => {
 
   const handleAbort = async () => {
     controlRef.current.shouldStop = true;
-    const orgId = state.orgId; // ✅ read from state
-    if (!orgId || !state.assetId || !state.assetVersionId) return;
+    const { orgId, assetId, assetVersionId, uploadId, objectName } = state;
+    if (!orgId || !assetId || !assetVersionId || !uploadId || !objectName)
+      return;
 
     try {
       await uploadApi.abort(
         formData.assetType,
         orgId,
-        state.assetId,
-        state.assetVersionId,
+        assetId,
+        assetVersionId,
+        uploadId,
+        objectName,
       );
     } finally {
       uploadStorage.clearAll();
@@ -211,7 +270,9 @@ export const useFileUpload = () => {
   };
 
   const progress =
-    state.totalBytes > 0 ? (state.uploadedBytes / state.totalBytes) * 100 : 0;
+    state.totalBytes > 0
+      ? Math.min((state.uploadedBytes / state.totalBytes) * 100, 100)
+      : 0;
 
   return {
     file,

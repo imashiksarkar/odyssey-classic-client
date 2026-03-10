@@ -43,6 +43,11 @@ const Home = () => {
                 Asset Manager
               </Button>
             </Link>
+            <Link href="/payment-service">
+              <Button variant="outline" size="sm">
+                Payment Service
+              </Button>
+            </Link>
           </div>
 
           {user ? (
