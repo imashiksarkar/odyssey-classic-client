@@ -49,6 +49,23 @@ type StorageUsageApiResponse = {
 
 type ActiveTab = "storage" | "trial";
 
+const isStorageUsagePayload = (value: unknown): value is StorageUsagePayload => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const payload = value as Record<string, unknown>;
+  return "storageUsages" in payload || "trialUsageUsage" in payload;
+};
+
+const isStorageUsageApiResponse = (value: unknown): value is StorageUsageApiResponse => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  return "data" in (value as Record<string, unknown>);
+};
+
 const formatLabel = (value?: string | null) => {
   if (!value) {
     return "N/A";
@@ -137,29 +154,28 @@ const normalizeStorageUsage = (
     };
   }
 
-  if (
-    "storageUsages" in payload ||
-    "trialUsageUsage" in payload
-  ) {
+  if (isStorageUsagePayload(payload)) {
     return {
       storageUsages: payload.storageUsages || [],
       trialUsageUsage: payload.trialUsageUsage || [],
     };
   }
 
-  if (payload.data && !Array.isArray(payload.data) && "storageUsages" in payload.data) {
+  if (!isStorageUsageApiResponse(payload) || !payload.data) {
+    return {
+      storageUsages: [],
+      trialUsageUsage: [],
+    };
+  }
+
+  if (isStorageUsagePayload(payload.data)) {
     return {
       storageUsages: payload.data.storageUsages || [],
       trialUsageUsage: payload.data.trialUsageUsage || [],
     };
   }
 
-  if (
-    payload.data &&
-    !Array.isArray(payload.data) &&
-    "data" in payload.data &&
-    payload.data.data
-  ) {
+  if ("data" in payload.data && isStorageUsagePayload(payload.data.data)) {
     return {
       storageUsages: payload.data.data.storageUsages || [],
       trialUsageUsage: payload.data.data.trialUsageUsage || [],

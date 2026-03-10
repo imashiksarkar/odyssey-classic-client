@@ -45,15 +45,34 @@ type ApiResponse<T> = {
 const modalBaseClass =
   "fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4";
 
+const isInvoiceItemArray = (value: unknown): value is InvoiceItem[] =>
+  Array.isArray(value);
+
+const isInvoicePayload = (value: unknown): value is InvoicePayload => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const payload = value as Record<string, unknown>;
+  return "meta" in payload || ("data" in payload && isInvoiceItemArray(payload.data));
+};
+
 const normalizeInvoicePayload = (payload: ApiResponse<InvoicePayload> | null | undefined) => {
   if (!payload?.data) {
     return { meta: {}, data: [] as InvoiceItem[] };
   }
 
-  if ("data" in payload.data && payload.data.data) {
+  if (isInvoicePayload(payload.data)) {
     return {
       meta: payload.data.meta || {},
       data: payload.data.data || [],
+    };
+  }
+
+  if ("data" in payload.data && isInvoicePayload(payload.data.data)) {
+    return {
+      meta: payload.data.data.meta || {},
+      data: payload.data.data.data || [],
     };
   }
 
