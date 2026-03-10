@@ -211,7 +211,7 @@ const UsagePerUnitPage = () => {
     setSuccessMessage("");
 
     try {
-      const response = hasRecord
+      const response = record
         ? await axios.put<UsagePerUnitApiResponse>(
             `${process.env.NEXT_PUBLIC_PAYMENT_SERVICE_BASE_URL}/usage-per-unit/${record.id}`,
             payload,
