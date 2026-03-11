@@ -145,9 +145,6 @@ export const useFileUpload = () => {
         // Tracks in-flight bytes for each part currently being uploaded.
         // Summed with completed-parts bytes to give real-time progress.
         const partProgressMap = new Map<number, number>();
-        console.log(
-          `[useFileUpload] Starting upload — totalParts: ${totalParts}, pending: ${queue.length}, chunkSize: ${chunkSize} bytes`,
-        );
 
         patchState({ status: "uploading" });
 
@@ -195,33 +192,13 @@ export const useFileUpload = () => {
                     (sum, v) => sum + v,
                     0,
                   );
-                  const uploadedBytes =
-                    completedParts.length * chunkSize + inFlight;
-                  console.log(
-                    `[useFileUpload] part ${partNumber} in-flight: ${loaded}B | total uploadedBytes: ${uploadedBytes}`,
-                  );
-                  patchState({ uploadedBytes });
+                  patchState({
+                    uploadedBytes: completedParts.length * chunkSize + inFlight,
+                  });
                 },
               );
-              activeXhrsRef.current.add(xhr);
-              let etag: string;
-              try {
-                etag = await promise;
-              } catch (err) {
-                activeXhrsRef.current.delete(xhr);
-                partProgressMap.delete(partNumber);
-                // __ABORTED__ means pause was clicked — stop silently, part not saved.
-                // Worker exits; resume will re-queue this part.
-                if (err instanceof Error && err.message === "__ABORTED__")
-                  return;
-                throw err;
-              }
-              activeXhrsRef.current.delete(xhr);
               partProgressMap.delete(partNumber);
               completedParts = [...completedParts, { partNumber, etag }];
-              console.log(
-                `[useFileUpload] part ${partNumber} complete — ${completedParts.length}/${totalParts} done`,
-              );
               patchState({
                 completedParts,
                 uploadedBytes: completedParts.length * chunkSize,

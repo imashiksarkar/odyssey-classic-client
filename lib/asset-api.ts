@@ -170,15 +170,29 @@ export const uploadApi = {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", signedUrl);
 
+      console.log(`[uploadPart] Starting XHR PUT, chunk size: ${chunk.size} bytes`);
+
       if (onProgress) {
         xhr.upload.addEventListener("progress", (e) => {
+          console.log(`[uploadPart] progress — loaded: ${e.loaded}, total: ${e.total}, computable: ${e.lengthComputable}`);
           if (e.lengthComputable) onProgress(e.loaded);
         });
+      } else {
+        console.warn("[uploadPart] No onProgress callback provided — progress won't be tracked");
       }
 
+      xhr.upload.addEventListener("loadstart", () =>
+        console.log("[uploadPart] XHR upload loadstart"),
+      );
+      xhr.upload.addEventListener("loadend", () =>
+        console.log("[uploadPart] XHR upload loadend"),
+      );
+
       xhr.addEventListener("load", () => {
+        console.log(`[uploadPart] XHR load — status: ${xhr.status}`);
         if (xhr.status >= 200 && xhr.status < 300) {
           const etag = xhr.getResponseHeader("ETag");
+          console.log(`[uploadPart] ETag received: ${etag}`);
           if (!etag) {
             reject(new Error("No ETag in response — check CORS exposes ETag header"));
             return;
@@ -189,8 +203,14 @@ export const uploadApi = {
         }
       });
 
-      xhr.addEventListener("error", () => reject(new Error("Part upload network error")));
-      xhr.addEventListener("abort", () => reject(new Error("Part upload aborted")));
+      xhr.addEventListener("error", () => {
+        console.error("[uploadPart] XHR network error");
+        reject(new Error("Part upload network error"));
+      });
+      xhr.addEventListener("abort", () => {
+        console.warn("[uploadPart] XHR aborted");
+        reject(new Error("Part upload aborted"));
+      });
 
       xhr.send(chunk);
     });
