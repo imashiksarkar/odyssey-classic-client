@@ -318,15 +318,24 @@ export default function AssetManagerPage() {
   // While uploading: tracks real in-flight bytes (smooth ~100ms updates).
   // When paused: freezes at the highest value seen.
   // On resume: continues upward from where it was, never backward.
+  // Resets when idle OR when a new/recovered session starts (uploadId changes).
   const [displayedPct, setDisplayedPct] = useState(0);
+  const prevUploadIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (state.status === "idle") {
       setDisplayedPct(0);
+      prevUploadIdRef.current = null;
+      return;
+    }
+    // New session (fresh start or reselect after refresh) — reset to confirmed %
+    if (state.uploadId !== prevUploadIdRef.current) {
+      prevUploadIdRef.current = state.uploadId;
+      setDisplayedPct(confirmedPct);
       return;
     }
     const live = isUploading ? progress : confirmedPct;
     setDisplayedPct((prev) => Math.max(prev, live));
-  }, [progress, confirmedPct, isUploading, state.status]);
+  }, [progress, confirmedPct, isUploading, state.status, state.uploadId]);
 
   const uploadStatusColor =
     state.status === "failed"
