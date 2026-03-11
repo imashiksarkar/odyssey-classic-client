@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { uploadApi, type Asset } from "@/lib/upload-api";
+import { uploadApi, type Asset } from "@/lib/asset-api";
 import { AssetCard } from "./AssetCard";
 
 export function ProjectsList() {

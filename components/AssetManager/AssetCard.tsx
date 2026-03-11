@@ -1,4 +1,4 @@
-import { type Asset } from "@/lib/upload-api";
+import { type Asset } from "@/lib/asset-api";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -11,8 +11,8 @@ function timeAgo(dateStr: string): string {
 
 const UPLOAD_STATUS_BADGE: Record<string, string> = {
   COMPLETED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  PENDING:   "bg-amber-50 text-amber-600 border-amber-200",
-  FAILED:    "bg-red-50 text-red-600 border-red-200",
+  PENDING: "bg-amber-50 text-amber-600 border-amber-200",
+  FAILED: "bg-red-50 text-red-600 border-red-200",
   UPLOADING: "bg-blue-50 text-blue-600 border-blue-200",
 };
 
@@ -30,7 +30,8 @@ export function AssetCard({
 
   const uploadStatus = asset.uploadStatus ?? "UNKNOWN";
   const badgeClass =
-    UPLOAD_STATUS_BADGE[uploadStatus] ?? "bg-gray-100 text-gray-500 border-gray-200";
+    UPLOAD_STATUS_BADGE[uploadStatus] ??
+    "bg-gray-100 text-gray-500 border-gray-200";
 
   return (
     <button

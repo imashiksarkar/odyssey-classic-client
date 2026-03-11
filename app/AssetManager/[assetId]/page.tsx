@@ -3,10 +3,18 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { uploadApi, type Asset, type UnrealProjectVersion } from "@/lib/upload-api";
+import {
+  uploadApi,
+  type Asset,
+  type UnrealProjectVersion,
+} from "@/lib/asset-api";
 import { VersionStatusCard } from "@/components/AssetManager/VersionStatusCard";
 import { InfoRow } from "@/components/AssetManager/InfoRow";
-import { mapStateToStatus, getStatusLabel, type ProjectStatus } from "@/lib/upload";
+import {
+  mapStateToStatus,
+  getStatusLabel,
+  type ProjectStatus,
+} from "@/lib/upload";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -18,13 +26,13 @@ function timeAgo(dateStr: string): string {
 }
 
 const VERSION_STATUS_BADGE: Record<ProjectStatus, string> = {
-  uploading:  "bg-blue-50 text-blue-600 border-blue-200",
+  uploading: "bg-blue-50 text-blue-600 border-blue-200",
   validating: "bg-amber-50 text-amber-600 border-amber-200",
-  building:   "bg-purple-50 text-purple-600 border-purple-200",
-  deploying:  "bg-cyan-50 text-cyan-600 border-cyan-200",
-  deployed:   "bg-emerald-50 text-emerald-700 border-emerald-200",
-  failed:     "bg-red-50 text-red-600 border-red-200",
-  unknown:    "bg-gray-100 text-gray-500 border-gray-200",
+  building: "bg-purple-50 text-purple-600 border-purple-200",
+  deploying: "bg-cyan-50 text-cyan-600 border-cyan-200",
+  deployed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  failed: "bg-red-50 text-red-600 border-red-200",
+  unknown: "bg-gray-100 text-gray-500 border-gray-200",
 };
 
 export default function AssetDetailPage() {
@@ -88,13 +96,19 @@ export default function AssetDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-2xl mx-auto space-y-6">
-
         {/* Back */}
         <button
           onClick={() => router.push("/AssetManager")}
           className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M19 12H5M12 5l-7 7 7 7" />
           </svg>
           All projects
@@ -141,12 +155,21 @@ export default function AssetDetailPage() {
             <InfoRow label="Upload Status" value={asset.uploadStatus} />
             <InfoRow label="Build Status" value={asset.buildStatus} />
             <InfoRow label="Validation" value={asset.validationStatus} />
-            <InfoRow label="Created" value={new Date(asset.createdAt).toLocaleDateString()} />
+            <InfoRow
+              label="Created"
+              value={new Date(asset.createdAt).toLocaleDateString()}
+            />
             {asset.unrealProjects?.[0]?.unrealPluginVersion && (
-              <InfoRow label="Plugin Version" value={asset.unrealProjects[0].unrealPluginVersion} />
+              <InfoRow
+                label="Plugin Version"
+                value={asset.unrealProjects[0].unrealPluginVersion}
+              />
             )}
             {asset.unrealProjects?.[0]?.unrealProjectVersion && (
-              <InfoRow label="Project Version" value={asset.unrealProjects[0].unrealProjectVersion} />
+              <InfoRow
+                label="Project Version"
+                value={asset.unrealProjects[0].unrealProjectVersion}
+              />
             )}
           </div>
         </div>
@@ -177,8 +200,12 @@ export default function AssetDetailPage() {
                     className="px-4 py-3 flex items-center justify-between gap-4"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{v.name}</p>
-                      <p className="text-xs text-gray-400">{timeAgo(v.updatedAt)}</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">
+                        {v.name}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {timeAgo(v.updatedAt)}
+                      </p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       {v.unrealEngineVersion && (
@@ -186,7 +213,9 @@ export default function AssetDetailPage() {
                           UE {v.unrealEngineVersion}
                         </span>
                       )}
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${badgeClass}`}>
+                      <span
+                        className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${badgeClass}`}
+                      >
                         {getStatusLabel(st)}
                       </span>
                     </div>
@@ -196,7 +225,6 @@ export default function AssetDetailPage() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

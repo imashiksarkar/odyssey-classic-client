@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { uploadApi } from "@/lib/upload-api";
+import { uploadApi } from "@/lib/asset-api";
 import {
   mapStateToPercent,
   mapStateToStatus,

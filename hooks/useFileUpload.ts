@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { uploadApi } from "@/lib/upload-api";
+import { uploadApi } from "@/lib/asset-api";
 import { uploadStorage } from "@/lib/upload-storage";
 import {
   INITIAL_UPLOAD_STATE,
