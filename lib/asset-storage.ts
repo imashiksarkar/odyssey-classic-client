@@ -1,4 +1,4 @@
-import type { UploadState } from "./upload";
+import type { UploadState } from "./asset.type";
 
 const STATE_KEY = "uploadState";
 const ORG_KEY = "uploadOrgId";
