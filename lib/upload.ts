@@ -1,14 +1,17 @@
-// export const getChunkSize = (fileSizeBytes: number): number => {
-//   const GB = 1024 * 1024 * 1024;
-//   const MB = 1024 * 1024;
+// Dynamic chunk sizing: fewer parts = fewer signed-URL round-trips + lower overhead.
+// GCS minimum part size is 5 MB (except the last part).
+export const getChunkSize = (fileSizeBytes: number): number => {
+  const GB = 1024 * 1024 * 1024;
+  const MB = 1024 * 1024;
 
-//   if (fileSizeBytes < 100 * MB) return 8 * MB; // < 100MB  → 16MB chunks
-//   if (fileSizeBytes < 500 * MB) return 16 * MB; // < 500MB  → 32MB chunks
-//   if (fileSizeBytes < 1 * GB) return 32 * MB; // < 1GB    → 64MB chunks
-//   if (fileSizeBytes < 5 * GB) return 64 * MB; // < 5GB    → 128MB chunks
-//   return 128 * MB; // >= 5GB   → 256MB chunks
-// };
+  if (fileSizeBytes < 100 * MB) return 8 * MB;   // < 100 MB  →  8 MB chunks (~12 parts max)
+  if (fileSizeBytes < 500 * MB) return 16 * MB;  // < 500 MB  → 16 MB chunks (~31 parts max)
+  if (fileSizeBytes < 1 * GB)   return 32 * MB;  // < 1 GB    → 32 MB chunks (~32 parts max)
+  if (fileSizeBytes < 5 * GB)   return 64 * MB;  // < 5 GB    → 64 MB chunks (~80 parts max)
+  return 128 * MB;                                // >= 5 GB   → 128 MB chunks (~80 parts max)
+};
 
+// Legacy constant kept for any code that hasn't migrated to getChunkSize yet.
 export const CHUNK_SIZE = 8 * 1024 * 1024;
 
 export type UploadStatus =

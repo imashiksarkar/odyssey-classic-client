@@ -1,37 +1,14 @@
 import type { UploadState } from "./upload";
 
-const STATE_KEY = "uploadState";
-const ORG_KEY = "uploadOrgId";
-
+// Upload state is now recovered from the backend on file re-select.
+// localStorage is no longer used — this module is kept for API compatibility
+// but performs no persistence.
 export const uploadStorage = {
-  getState: (): UploadState | null => {
-    if (typeof window === "undefined") return null;
-    const saved = localStorage.getItem(STATE_KEY);
-    return saved ? JSON.parse(saved) : null;
-  },
-
-  setState: (state: UploadState) => {
-    localStorage.setItem(STATE_KEY, JSON.stringify(state));
-  },
-
-  clearState: () => {
-    localStorage.removeItem(STATE_KEY);
-  },
-
-  getOrgId: (): string | null => {
-    return localStorage.getItem(ORG_KEY);
-  },
-
-  setOrgId: (orgId: string) => {
-    localStorage.setItem(ORG_KEY, orgId);
-  },
-
-  clearOrgId: () => {
-    localStorage.removeItem(ORG_KEY);
-  },
-
-  clearAll: () => {
-    localStorage.removeItem(STATE_KEY);
-    localStorage.removeItem(ORG_KEY);
-  },
+  getState: (): UploadState | null => null,
+  setState: (_state: UploadState) => {},
+  clearState: () => {},
+  getOrgId: (): string | null => null,
+  setOrgId: (_orgId: string) => {},
+  clearOrgId: () => {},
+  clearAll: () => {},
 };

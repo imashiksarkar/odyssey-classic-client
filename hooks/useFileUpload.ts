@@ -2,16 +2,16 @@
 
 import { useState, useRef, useCallback } from "react";
 import { uploadApi } from "@/lib/upload-api";
-import { uploadStorage } from "@/lib/upload-storage";
 import {
   INITIAL_UPLOAD_STATE,
-  isUploadExpired,
+  getChunkSize,
   type UploadState,
   type UploadFormData,
-  CHUNK_SIZE,
 } from "@/lib/upload";
 
-const MAX_WORKERS = 5;
+// 10 concurrent part-upload workers. Each uploads directly to GCS in parallel.
+// The bottleneck is outbound bandwidth, not CPU, so more workers = faster uploads.
+const MAX_WORKERS = 10;
 const MAX_RETRIES = 3;
 
 export const useFileUpload = () => {
@@ -20,33 +20,49 @@ export const useFileUpload = () => {
   const controlRef = useRef({ shouldStop: false });
 
   const patchState = useCallback((patch: Partial<UploadState>) => {
-    setState((prev) => {
-      const next = { ...prev, ...patch };
-      uploadStorage.setState(next);
-      return next;
-    });
+    setState((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * On file select, query the backend for an active upload session matching
+   * this filename. If found, recover the exact completed parts from GCS.
+   * This replaces localStorage — works after page refresh, wifi disconnect,
+   * or even switching browsers on the same account.
+   */
+  const handleFileSelect = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
     setFile(selected);
 
-    const saved = uploadStorage.getState();
-    if (
-      saved &&
-      saved.assetId &&
-      saved.status === "paused" &&
-      !isUploadExpired(saved.createdAt) &&
-      saved.fileName === selected.name // match by filename
-    ) {
-      // Offer resume — don't auto-start, just restore state
-      setState({ ...saved, totalBytes: selected.size });
+    const session = await uploadApi.getSession(selected.name);
+    if (session) {
+      // Recover actual uploaded parts from GCS — source-of-truth after any disconnect
+      const completedParts = await uploadApi.listParts(
+        session.objectName,
+        session.uploadId,
+      );
+      const chunkSize = getChunkSize(selected.size);
+      setState({
+        ...INITIAL_UPLOAD_STATE,
+        orgId: session.orgId,
+        assetId: session.assetId,
+        assetVersionId: session.assetVersionId,
+        uploadId: session.uploadId,
+        objectName: session.objectName,
+        completedParts,
+        totalBytes: selected.size,
+        uploadedBytes: completedParts.length * chunkSize,
+        status: "paused",
+        fileName: selected.name,
+        createdAt: Date.now(),
+      });
     } else {
-      uploadStorage.clearAll();
-      patchState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
+      setState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
     }
   };
+
   const performUpload = useCallback(
     async (fileOverride?: File, stateOverride?: UploadState) => {
       const activeFile = fileOverride ?? file;
@@ -54,6 +70,9 @@ export const useFileUpload = () => {
       if (!activeFile) return;
 
       controlRef.current.shouldStop = false;
+
+      // Dynamic chunk size: fewer parts for large files = less overhead
+      const chunkSize = getChunkSize(activeFile.size);
 
       try {
         let uploadId = activeState.uploadId;
@@ -63,14 +82,8 @@ export const useFileUpload = () => {
         let orgId = activeState.orgId;
         let completedParts = activeState.completedParts ?? [];
 
-        // Initiate if no saved session or expired
-        if (
-          !uploadId ||
-          !assetId ||
-          !versionId ||
-          !orgId ||
-          isUploadExpired(activeState.createdAt)
-        ) {
+        // Initiate a new upload if no session exists in state
+        if (!uploadId || !assetId || !versionId || !orgId) {
           const initiated = await uploadApi.initiate(
             activeFile,
             formDataRef.current,
@@ -98,8 +111,7 @@ export const useFileUpload = () => {
           throw new Error("Upload session could not be established");
         }
 
-        // Build part queue
-        const chunkSize = CHUNK_SIZE;
+        // Build the queue of parts not yet uploaded
         const totalParts = Math.ceil(activeFile.size / chunkSize);
         const completedPartNumbers = new Set(
           completedParts.map((p) => p.partNumber),
@@ -111,7 +123,19 @@ export const useFileUpload = () => {
 
         patchState({ status: "uploading" });
 
-        // Worker function
+        // Pre-fetch signed URLs for ALL pending parts in a single request.
+        // Previously: N round-trips to backend (one per part per worker).
+        // Now: 1 request → backend generates all URLs in parallel → workers
+        //      start uploading immediately without waiting for auth round-trips.
+        const signedUrlMap = await uploadApi.batchGetSignedUrls(
+          orgId,
+          assetId,
+          versionId,
+          uploadId,
+          objectName,
+          queue,
+        );
+
         const uploadPart = async (partNumber: number): Promise<void> => {
           const start = (partNumber - 1) * chunkSize;
           const end = Math.min(start + chunkSize, activeFile.size);
@@ -120,18 +144,21 @@ export const useFileUpload = () => {
           let attempts = 0;
           while (attempts < MAX_RETRIES) {
             try {
-              const signedUrl = await uploadApi.getSignedUrl(
-                orgId!,
-                assetId!,
-                versionId!,
-                uploadId!,
-                objectName!,
-                partNumber,
-              );
+              // First attempt: use pre-fetched URL (no backend round-trip).
+              // Retry: fetch a fresh URL in case the pre-fetched one expired.
+              const signedUrl =
+                attempts === 0
+                  ? signedUrlMap[partNumber]
+                  : await uploadApi.getSignedUrl(
+                      orgId!,
+                      assetId!,
+                      versionId!,
+                      uploadId!,
+                      objectName!,
+                      partNumber,
+                    );
 
               const etag = await uploadApi.uploadPart(signedUrl, chunk);
-
-              // Save completed part
               completedParts = [...completedParts, { partNumber, etag }];
               patchState({
                 completedParts,
@@ -141,13 +168,12 @@ export const useFileUpload = () => {
             } catch (err) {
               attempts++;
               if (attempts >= MAX_RETRIES) throw err;
-              // Wait before retry — exponential backoff
               await new Promise((r) => setTimeout(r, 1000 * attempts));
             }
           }
         };
 
-        // Concurrency pool — max 5 workers
+        // Concurrency pool — MAX_WORKERS (10) parts upload simultaneously
         const runPool = async (): Promise<void> => {
           let index = 0;
 
@@ -174,7 +200,7 @@ export const useFileUpload = () => {
           return;
         }
 
-        // All parts done — complete upload
+        // All parts done — assemble on GCS
         const sortedParts = [...completedParts].sort(
           (a, b) => a.partNumber - b.partNumber,
         );
@@ -190,7 +216,6 @@ export const useFileUpload = () => {
         );
 
         patchState({ uploadedBytes: activeFile.size, status: "completed" });
-        uploadStorage.clearAll();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         patchState({ status: "failed", error: message });
@@ -225,15 +250,17 @@ export const useFileUpload = () => {
 
   const handlePause = () => {
     controlRef.current.shouldStop = true;
+    // Pool workers check shouldStop before each part; status set to "paused"
+    // inside performUpload after the pool exits.
   };
 
   const handleResume = () => {
-    const saved = uploadStorage.getState();
-    if (saved && !isUploadExpired(saved.createdAt)) {
-      performUpload(file ?? undefined, saved);
+    // State is held in-memory. If it was lost (page refresh), handleFileSelect
+    // already recovered it from the backend + GCS.
+    if (state.uploadId && state.assetId) {
+      performUpload(file ?? undefined, state);
     } else {
-      uploadStorage.clearAll();
-      patchState(INITIAL_UPLOAD_STATE);
+      setState(INITIAL_UPLOAD_STATE);
     }
   };
 
@@ -258,14 +285,12 @@ export const useFileUpload = () => {
         objectName,
       );
     } finally {
-      uploadStorage.clearAll();
       setState(INITIAL_UPLOAD_STATE);
     }
   };
 
   const handleReset = () => {
     setFile(null);
-    uploadStorage.clearAll();
     setState(INITIAL_UPLOAD_STATE);
   };
 

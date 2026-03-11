@@ -56,6 +56,29 @@ export const uploadApi = {
     return res.data.data.signedUrl;
   },
 
+  /**
+   * Get signed URLs for multiple parts in one request.
+   * Returns a map of partNumber → signedUrl.
+   */
+  batchGetSignedUrls: async (
+    orgId: string,
+    assetId: string,
+    assetVersionId: string,
+    uploadId: string,
+    objectName: string,
+    partNumbers: number[],
+  ): Promise<Record<number, string>> => {
+    const res = await axios.post(`${API_BASE}/uploader/batch-signed-urls`, {
+      orgId,
+      assetId,
+      assetVersionId,
+      uploadId,
+      objectName,
+      partNumbers,
+    });
+    return res.data.data.signedUrls;
+  },
+
   uploadPart: async (signedUrl: string, chunk: Blob): Promise<string> => {
     const res = await fetch(signedUrl, {
       method: "PUT",
@@ -110,6 +133,49 @@ export const uploadApi = {
       uploadId,
       objectName,
     });
+  },
+
+  /**
+   * Check the backend for an in-progress upload session matching this filename.
+   * Returns session info if found, null otherwise.
+   * Used on file-select to enable resume without localStorage.
+   */
+  getSession: async (
+    filename: string,
+  ): Promise<{
+    orgId: string;
+    assetId: string;
+    assetVersionId: string;
+    uploadId: string;
+    objectName: string;
+  } | null> => {
+    try {
+      const res = await axios.get(`${API_BASE}/uploader/session`, {
+        params: { filename },
+      });
+      return res.data.data;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * List parts already uploaded to GCS for a multipart upload.
+   * Gives the exact progress after a wifi disconnect or page refresh.
+   */
+  listParts: async (
+    objectName: string,
+    uploadId: string,
+  ): Promise<{ partNumber: number; etag: string }[]> => {
+    try {
+      const res = await axios.post(`${API_BASE}/uploader/list-parts`, {
+        objectName,
+        uploadId,
+      });
+      return res.data.data.parts ?? [];
+    } catch {
+      return [];
+    }
   },
 
   getProjectVersion: async (
