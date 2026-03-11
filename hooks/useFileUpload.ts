@@ -28,6 +28,13 @@ export const useFileUpload = () => {
   latestStateRef.current = state;
   latestFileRef.current = file;
 
+  // Stable refs so persistent event listeners (online) always read latest values
+  // without needing them in dependency arrays.
+  const latestStateRef = useRef(state);
+  const latestFileRef = useRef(file);
+  latestStateRef.current = state;
+  latestFileRef.current = file;
+
   const patchState = useCallback((patch: Partial<UploadState>) => {
     setState((prev) => ({ ...prev, ...patch }));
   }, []);
