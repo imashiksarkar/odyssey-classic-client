@@ -531,7 +531,9 @@ export default function AssetManagerPage() {
                 {state.status}
               </span>
               <span className="text-xs text-zinc-500">
-                {(confirmedBytes / 1024 / 1024).toFixed(1)} / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB
+                {/* While uploading: show in-flight bytes (matches the % shown above).
+                    When paused/done: show confirmed bytes (what GCS actually saved). */}
+                {((isUploading ? state.uploadedBytes : confirmedBytes) / 1024 / 1024).toFixed(1)} / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB
                 {totalParts > 0 && (
                   <span className="text-zinc-700"> · {state.completedParts.length}/{totalParts} parts</span>
                 )}
