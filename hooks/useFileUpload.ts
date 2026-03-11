@@ -28,12 +28,6 @@ export const useFileUpload = () => {
   latestStateRef.current = state;
   latestFileRef.current = file;
 
-  // Stable refs so persistent event listeners (online) always read latest values
-  // without needing them in dependency arrays.
-  const latestStateRef = useRef(state);
-  const latestFileRef = useRef(file);
-  latestStateRef.current = state;
-  latestFileRef.current = file;
 
   const patchState = useCallback((patch: Partial<UploadState>) => {
     setState((prev) => ({ ...prev, ...patch }));
@@ -204,6 +198,19 @@ export const useFileUpload = () => {
                   });
                 },
               );
+              activeXhrsRef.current.add(xhr);
+              let etag: string;
+              try {
+                etag = await promise;
+              } catch (err) {
+                activeXhrsRef.current.delete(xhr);
+                partProgressMap.delete(partNumber);
+                // __ABORTED__ means pause was clicked — stop silently, part not saved.
+                // Worker exits; resume will re-queue this part.
+                if (err instanceof Error && err.message === "__ABORTED__") return;
+                throw err;
+              }
+              activeXhrsRef.current.delete(xhr);
               partProgressMap.delete(partNumber);
               completedParts = [...completedParts, { partNumber, etag }];
               patchState({
