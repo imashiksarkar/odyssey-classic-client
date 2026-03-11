@@ -1,14 +1,14 @@
-// Dynamic chunk sizing: fewer parts = fewer signed-URL round-trips + lower overhead.
-// GCS minimum part size is 5 MB (except the last part).
+// Dynamic chunk sizing — target ~200 parts per upload so confirmed progress moves
+// smoothly and the pause/resume gap stays ≤ ~5% (10 workers × chunkSize / fileSize).
+// GCS minimum part size is 5 MB for non-last parts.
 export const getChunkSize = (fileSizeBytes: number): number => {
-  const GB = 1024 * 1024 * 1024;
   const MB = 1024 * 1024;
+  const GB = 1024 * MB;
 
-  if (fileSizeBytes < 100 * MB) return 8 * MB;   // < 100 MB  →  8 MB chunks (~12 parts max)
-  if (fileSizeBytes < 500 * MB) return 16 * MB;  // < 500 MB  → 16 MB chunks (~31 parts max)
-  if (fileSizeBytes < 1 * GB)   return 32 * MB;  // < 1 GB    → 32 MB chunks (~32 parts max)
-  if (fileSizeBytes < 5 * GB)   return 64 * MB;  // < 5 GB    → 64 MB chunks (~80 parts max)
-  return 128 * MB;                                // >= 5 GB   → 128 MB chunks (~80 parts max)
+  if (fileSizeBytes < 1 * GB)   return 5 * MB;    // < 1 GB   →   5 MB chunks (~200 parts max)
+  if (fileSizeBytes < 5 * GB)   return 25 * MB;   // < 5 GB   →  25 MB chunks (~205 parts max)
+  if (fileSizeBytes < 20 * GB)  return 100 * MB;  // < 20 GB  → 100 MB chunks (~205 parts max)
+  return 256 * MB;                                  // ≥ 20 GB  → 256 MB chunks (~200 parts for 50 GB)
 };
 
 // Legacy constant kept for any code that hasn't migrated to getChunkSize yet.

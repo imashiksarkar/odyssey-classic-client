@@ -312,6 +312,7 @@ export default function AssetManagerPage() {
   const chunkSize = state.totalBytes > 0 ? getChunkSize(state.totalBytes) : 0;
   const confirmedBytes = state.completedParts.length * chunkSize;
   const confirmedPct = state.totalBytes > 0 ? (confirmedBytes / state.totalBytes) * 100 : 0;
+  const totalParts = chunkSize > 0 ? Math.ceil(state.totalBytes / chunkSize) : 0;
 
   const uploadStatusColor =
     state.status === "failed"
@@ -485,26 +486,18 @@ export default function AssetManagerPage() {
                 Upload Progress
               </h2>
               <span className={`text-sm font-bold ${uploadStatusColor}`}>
-                {progress.toFixed(1)}%
+                {confirmedPct.toFixed(1)}%
               </span>
             </div>
 
-            {/* Bar — two layers: in-flight (faded) + confirmed (solid) */}
+            {/* Bar — GCS-confirmed bytes only. Pause at X% = resume from X%, always. */}
             <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden relative">
-              {/* In-flight layer (semi-transparent) — only while actively uploading */}
-              {isUploading && (
-                <div
-                  className={`h-full rounded-full absolute left-0 top-0 transition-all duration-300 ${progressBarColor} opacity-35`}
-                  style={{ width: `${Math.max(progress, 1)}%` }}
-                />
-              )}
-              {/* Confirmed layer (solid) — chunks GCS has fully received */}
               <div
-                className={`h-full rounded-full absolute left-0 top-0 transition-all duration-300 ${progressBarColor}`}
-                style={{ width: `${Math.max(isUploading ? confirmedPct : progress, 0)}%` }}
+                className={`h-full rounded-full absolute left-0 top-0 transition-all duration-500 ${progressBarColor}`}
+                style={{ width: `${Math.max(confirmedPct, 0)}%` }}
               >
                 {isUploading && (
-                  <span className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
+                  <span className="absolute right-0 top-0 h-full w-3 bg-white/30 animate-pulse rounded-r-full" />
                 )}
               </div>
             </div>
@@ -516,14 +509,13 @@ export default function AssetManagerPage() {
                 {state.status}
               </span>
               <span className="text-xs text-zinc-500">
-                {isUploading && progress > confirmedPct
-                  ? <>
-                      <span className="text-zinc-400">{(confirmedBytes / 1024 / 1024).toFixed(1)} MB confirmed</span>
-                      <span className="text-zinc-600"> + {((state.uploadedBytes - confirmedBytes) / 1024 / 1024).toFixed(1)} MB in-flight</span>
-                      <span className="text-zinc-500"> / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB</span>
-                    </>
-                  : <>{(state.uploadedBytes / 1024 / 1024).toFixed(1)} / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB</>
-                }
+                {(confirmedBytes / 1024 / 1024).toFixed(1)} / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB
+                {totalParts > 0 && (
+                  <span className="text-zinc-700"> · {state.completedParts.length}/{totalParts} parts</span>
+                )}
+                {isUploading && (state.uploadedBytes - confirmedBytes) > 0 && (
+                  <span className="text-zinc-700"> · {((state.uploadedBytes - confirmedBytes) / 1024 / 1024).toFixed(1)} MB uploading</span>
+                )}
               </span>
             </div>
 
