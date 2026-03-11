@@ -3,7 +3,7 @@ import type {
   InitResponse,
   ProjectVersionInfo,
   UploadFormData,
-} from "./upload";
+} from "./asset.type";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 

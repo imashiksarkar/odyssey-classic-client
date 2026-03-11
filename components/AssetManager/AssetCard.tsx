@@ -58,14 +58,14 @@ export function AssetCard({
           <span className="text-sm font-semibold text-gray-900 truncate">
             {displayName}
           </span>
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-500 border border-gray-200 rounded px-1.5 py-0.5">
             {asset.assetType === "UNREAL_PROJECT" ? "Unreal" : "3D"}
           </span>
         </div>
-        <div className="flex items-center gap-3 text-xs text-gray-400">
+        <div className="flex items-center gap-3 text-xs text-gray-500">
           <span>{timeAgo(asset.updatedAt)}</span>
           <span>·</span>
-          <span className="font-mono text-[11px]">{asset.id.slice(0, 8)}…</span>
+          <span className="font-mono text-[11px]">{asset.id}</span>
         </div>
       </div>
 

@@ -14,7 +14,7 @@ import {
   mapStateToStatus,
   getStatusLabel,
   type ProjectStatus,
-} from "@/lib/upload";
+} from "@/lib/asset.type";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -92,6 +92,7 @@ export default function AssetDetailPage() {
 
   // Priority: query param from fresh upload → latest version from API
   const shownVersionId = versionIdParam ?? versions[0]?.id;
+  console.log(versions);
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -123,7 +124,7 @@ export default function AssetDetailPage() {
                 {asset.assetType === "UNREAL_PROJECT" ? "Unreal" : "3D"}
               </span>
             </div>
-            <div className="space-y-0.5 text-xs text-gray-400 font-mono">
+            <div className="space-y-0.5 text-xs text-gray-600 font-mono">
               <p>ID: {asset.id}</p>
               <p>Updated: {timeAgo(asset.updatedAt)}</p>
             </div>
@@ -157,7 +158,11 @@ export default function AssetDetailPage() {
             <InfoRow label="Validation" value={asset.validationStatus} />
             <InfoRow
               label="Created"
-              value={new Date(asset.createdAt).toLocaleDateString()}
+              value={new Date(asset.createdAt).toLocaleDateString("en-GB", {
+                year: "numeric",
+                month: "long",
+                day: "2-digit",
+              })}
             />
             {asset.unrealProjects?.[0]?.unrealPluginVersion && (
               <InfoRow

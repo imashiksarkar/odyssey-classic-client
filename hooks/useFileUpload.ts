@@ -2,14 +2,14 @@
 
 import { useState, useRef, useCallback } from "react";
 import { uploadApi } from "@/lib/asset-api";
-import { uploadStorage } from "@/lib/upload-storage";
+import { uploadStorage } from "@/lib/asset-storage";
 import {
   INITIAL_UPLOAD_STATE,
   isUploadExpired,
   type UploadState,
   type UploadFormData,
   CHUNK_SIZE,
-} from "@/lib/upload";
+} from "@/lib/asset.type";
 
 const MAX_WORKERS = 5;
 const MAX_RETRIES = 3;

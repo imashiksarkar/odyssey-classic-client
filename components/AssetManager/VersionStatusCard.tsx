@@ -9,7 +9,7 @@ import {
   getStateLabel,
   type ProjectVersionInfo,
   type ProjectStatus,
-} from "@/lib/upload";
+} from "@/lib/asset.type";
 import { InfoRow } from "./InfoRow";
 
 const STATUS_CONFIG: Record<
