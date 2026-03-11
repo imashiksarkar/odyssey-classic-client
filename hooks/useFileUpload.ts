@@ -341,10 +341,17 @@ export const useFileUpload = () => {
   };
 
   const handleAbort = async () => {
+    // Kill all in-flight XHRs immediately — stops data flowing to GCS right now.
+    console.log(`[handleAbort] Aborting ${activeXhrsRef.current.size} in-flight XHRs`);
+    activeXhrsRef.current.forEach((xhr) => xhr.abort());
+    activeXhrsRef.current.clear();
+
     controlRef.current.shouldStop = true;
     const { orgId, assetId, assetVersionId, uploadId, objectName } = state;
-    if (!orgId || !assetId || !assetVersionId || !uploadId || !objectName)
+    if (!orgId || !assetId || !assetVersionId || !uploadId || !objectName) {
+      setState(INITIAL_UPLOAD_STATE);
       return;
+    }
 
     try {
       await uploadApi.abort(

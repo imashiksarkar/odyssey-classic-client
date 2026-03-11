@@ -9,6 +9,7 @@ import {
   mapStateToStatus,
   getStatusLabel,
   getStateLabel,
+  getChunkSize,
   type ProjectVersionInfo,
   type ProjectStatus,
 } from "@/lib/upload";
@@ -308,6 +309,10 @@ export default function AssetManagerPage() {
   const showStatus = state.status !== "idle";
   const showProjectCard = state.status === "completed" && state.assetVersionId;
 
+  const chunkSize = state.totalBytes > 0 ? getChunkSize(state.totalBytes) : 0;
+  const confirmedBytes = state.completedParts.length * chunkSize;
+  const confirmedPct = state.totalBytes > 0 ? (confirmedBytes / state.totalBytes) * 100 : 0;
+
   const uploadStatusColor =
     state.status === "failed"
       ? "text-red-400"
@@ -465,8 +470,8 @@ export default function AssetManagerPage() {
               </p>
               <p className="text-xs text-amber-400/80 mt-0.5">
                 {state.completedParts.length > 0
-                  ? `${state.completedParts.length} part${state.completedParts.length > 1 ? "s" : ""} already uploaded — resuming from where you left off.`
-                  : "No fully uploaded parts found (upload was < 1 chunk). Resuming from the beginning using the existing session."}
+                  ? `${state.completedParts.length} part${state.completedParts.length > 1 ? "s" : ""} confirmed by GCS — resuming from where you left off.`
+                  : `No completed chunks found in GCS. GCS only saves a chunk when the full ${Math.round(getChunkSize(state.totalBytes) / 1024 / 1024)} MB arrives — data in-flight when you paused was discarded. Resuming from the beginning with the same session ID.`}
               </p>
             </div>
           </section>
@@ -484,11 +489,19 @@ export default function AssetManagerPage() {
               </span>
             </div>
 
-            {/* Bar */}
-            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
+            {/* Bar — two layers: in-flight (faded) + confirmed (solid) */}
+            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden relative">
+              {/* In-flight layer (semi-transparent) — only while actively uploading */}
+              {isUploading && (
+                <div
+                  className={`h-full rounded-full absolute left-0 top-0 transition-all duration-300 ${progressBarColor} opacity-35`}
+                  style={{ width: `${Math.max(progress, 1)}%` }}
+                />
+              )}
+              {/* Confirmed layer (solid) — chunks GCS has fully received */}
               <div
-                className={`h-full rounded-full transition-all duration-300 ${progressBarColor} ${isUploading ? "relative" : ""}`}
-                style={{ width: `${Math.max(progress, 1)}%` }}
+                className={`h-full rounded-full absolute left-0 top-0 transition-all duration-300 ${progressBarColor}`}
+                style={{ width: `${Math.max(isUploading ? confirmedPct : progress, 0)}%` }}
               >
                 {isUploading && (
                   <span className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
@@ -503,8 +516,14 @@ export default function AssetManagerPage() {
                 {state.status}
               </span>
               <span className="text-xs text-zinc-500">
-                {(state.uploadedBytes / 1024 / 1024).toFixed(1)} /{" "}
-                {(state.totalBytes / 1024 / 1024).toFixed(1)} MB
+                {isUploading && progress > confirmedPct
+                  ? <>
+                      <span className="text-zinc-400">{(confirmedBytes / 1024 / 1024).toFixed(1)} MB confirmed</span>
+                      <span className="text-zinc-600"> + {((state.uploadedBytes - confirmedBytes) / 1024 / 1024).toFixed(1)} MB in-flight</span>
+                      <span className="text-zinc-500"> / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB</span>
+                    </>
+                  : <>{(state.uploadedBytes / 1024 / 1024).toFixed(1)} / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB</>
+                }
               </span>
             </div>
 
