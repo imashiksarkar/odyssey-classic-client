@@ -124,6 +124,7 @@ export const useFileUpload = () => {
         // Tracks in-flight bytes for each part currently being uploaded.
         // Summed with completed-parts bytes to give real-time progress.
         const partProgressMap = new Map<number, number>();
+        console.log(`[useFileUpload] Starting upload — totalParts: ${totalParts}, pending: ${queue.length}, chunkSize: ${chunkSize} bytes`);
 
         patchState({ status: "uploading" });
 
@@ -171,13 +172,14 @@ export const useFileUpload = () => {
                     (sum, v) => sum + v,
                     0,
                   );
-                  patchState({
-                    uploadedBytes: completedParts.length * chunkSize + inFlight,
-                  });
+                  const uploadedBytes = completedParts.length * chunkSize + inFlight;
+                  console.log(`[useFileUpload] part ${partNumber} in-flight: ${loaded}B | total uploadedBytes: ${uploadedBytes}`);
+                  patchState({ uploadedBytes });
                 },
               );
               partProgressMap.delete(partNumber);
               completedParts = [...completedParts, { partNumber, etag }];
+              console.log(`[useFileUpload] part ${partNumber} complete — ${completedParts.length}/${totalParts} done`);
               patchState({
                 completedParts,
                 uploadedBytes: completedParts.length * chunkSize,
