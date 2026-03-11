@@ -43,6 +43,8 @@ export interface UploadState {
   createdAt: number | null;
   error: string | null;
   fileName: string | null;
+  // Set to true when a previous session is found on file re-select (page refresh / reconnect)
+  sessionRecovered: boolean;
 }
 
 export interface UploadFormData {
@@ -95,6 +97,7 @@ export const INITIAL_UPLOAD_STATE: UploadState = {
   createdAt: null,
   error: null,
   fileName: null,
+  sessionRecovered: false,
 };
 
 export function mapStateToStatus(state: string): ProjectStatus {

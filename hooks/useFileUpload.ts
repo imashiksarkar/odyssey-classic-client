@@ -12,12 +12,14 @@ import {
 // 10 concurrent part-upload workers. Each uploads directly to GCS in parallel.
 // The bottleneck is outbound bandwidth, not CPU, so more workers = faster uploads.
 const MAX_WORKERS = 10;
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 6; // Higher to survive a brief wifi drop + reconnect
 
 export const useFileUpload = () => {
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<UploadState>(INITIAL_UPLOAD_STATE);
   const controlRef = useRef({ shouldStop: false });
+  // All XHRs that are currently in-flight. Abort all of them on pause.
+  const activeXhrsRef = useRef<Set<XMLHttpRequest>>(new Set());
 
   // Stable refs so persistent event listeners (online) always read latest values
   // without needing them in dependency arrays.
@@ -67,6 +69,7 @@ export const useFileUpload = () => {
         status: "paused",
         fileName: selected.name,
         createdAt: Date.now(),
+        sessionRecovered: true,
       });
     } else {
       console.log(`[handleFileSelect] No active session found for "${selected.name}" — starting fresh`);
@@ -174,7 +177,7 @@ export const useFileUpload = () => {
                       partNumber,
                     );
 
-              const etag = await uploadApi.uploadPart(
+              const { promise, xhr } = uploadApi.uploadPart(
                 signedUrl,
                 chunk,
                 (loaded) => {
@@ -188,6 +191,19 @@ export const useFileUpload = () => {
                   patchState({ uploadedBytes });
                 },
               );
+              activeXhrsRef.current.add(xhr);
+              let etag: string;
+              try {
+                etag = await promise;
+              } catch (err) {
+                activeXhrsRef.current.delete(xhr);
+                partProgressMap.delete(partNumber);
+                // __ABORTED__ means pause was clicked — stop silently, part not saved.
+                // Worker exits; resume will re-queue this part.
+                if (err instanceof Error && err.message === "__ABORTED__") return;
+                throw err;
+              }
+              activeXhrsRef.current.delete(xhr);
               partProgressMap.delete(partNumber);
               completedParts = [...completedParts, { partNumber, etag }];
               console.log(`[useFileUpload] part ${partNumber} complete — ${completedParts.length}/${totalParts} done`);
@@ -199,7 +215,21 @@ export const useFileUpload = () => {
             } catch (err) {
               attempts++;
               if (attempts >= MAX_RETRIES) throw err;
-              await new Promise((r) => setTimeout(r, 1000 * attempts));
+              // If we're offline, wait until the browser reports online before
+              // retrying — no point hammering with retries while disconnected.
+              if (!navigator.onLine) {
+                console.log(`[uploadPart] Offline — waiting for reconnect before retry (attempt ${attempts})`);
+                await new Promise<void>((resolve) => {
+                  const onOnline = () => {
+                    window.removeEventListener("online", onOnline);
+                    resolve();
+                  };
+                  window.addEventListener("online", onOnline);
+                });
+                console.log(`[uploadPart] Back online — retrying part ${partNumber}`);
+              } else {
+                await new Promise((r) => setTimeout(r, 1000 * attempts));
+              }
             }
           }
         };
@@ -286,9 +316,12 @@ export const useFileUpload = () => {
 
   const handlePause = () => {
     controlRef.current.shouldStop = true;
-    // Set status immediately so the Resume button appears right away.
-    // Workers will finish their current in-flight part then stop — the
-    // completed bytes from those parts are saved normally.
+    // Abort all in-flight XHRs immediately — stops progress events and frees bandwidth.
+    // Each aborted XHR resolves to __ABORTED__ error which is caught silently in uploadPart.
+    // Completed parts are already saved in completedParts; aborted parts will be re-uploaded on resume.
+    console.log(`[handlePause] Aborting ${activeXhrsRef.current.size} in-flight XHRs`);
+    activeXhrsRef.current.forEach((xhr) => xhr.abort());
+    activeXhrsRef.current.clear();
     patchState({ status: "paused" });
   };
 
@@ -333,8 +366,15 @@ export const useFileUpload = () => {
   };
 
   // ── Wifi reconnect: auto-resume if upload was interrupted by network loss ──
-  // Registered once (empty deps). Reads latest state/file from refs to avoid
-  // stale closures. Only fires when the browser transitions from offline→online.
+  // TWO mechanisms to guarantee no upload stays stuck after reconnect:
+  //
+  // 1) window.online fires while status is already "failed" → resume immediately
+  // 2) status transitions to "failed" while browser is already online
+  //    (online fired before retries exhausted) → resume immediately
+  //
+  // The uploadPart retry loop also waits for online before each retry, so
+  // short disconnects (< MAX_RETRIES attempts) auto-recover without ever
+  // reaching "failed" status at all.
   useEffect(() => {
     const onOnline = () => {
       const s = latestStateRef.current;
@@ -345,15 +385,34 @@ export const useFileUpload = () => {
             s.completedParts?.length ?? 0
           } completed parts`,
         );
-        // Resume using current completed parts as checkpoint.
-        // GCS is the source of truth: any part that received an ETag before
-        // the disconnect is in completedParts and won't be re-uploaded.
         performUploadRef.current(f, { ...s, error: null });
       }
     };
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, []); // stable — reads from refs, no deps needed
+  }, []);
+
+  // Mechanism 2: status just became "failed" and we're already online
+  useEffect(() => {
+    if (
+      state.status === "failed" &&
+      state.uploadId &&
+      state.assetId &&
+      file &&
+      navigator.onLine
+    ) {
+      console.log(
+        `[useFileUpload] Status became failed while online — auto-resuming from ${
+          state.completedParts?.length ?? 0
+        } completed parts`,
+      );
+      // Small delay to let React finish the current render cycle
+      const timer = setTimeout(() => {
+        performUploadRef.current(file, { ...state, error: null });
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [state.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const progress =
     state.totalBytes > 0

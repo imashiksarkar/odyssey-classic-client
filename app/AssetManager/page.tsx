@@ -455,6 +455,23 @@ export default function AssetManagerPage() {
           )}
         </section>
 
+        {/* ── Session Recovery Banner ── */}
+        {state.sessionRecovered && state.status === "paused" && (
+          <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 py-3 flex items-start gap-3">
+            <span className="text-amber-400 text-base mt-0.5">⚡</span>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">
+                Previous upload session recovered
+              </p>
+              <p className="text-xs text-amber-400/80 mt-0.5">
+                {state.completedParts.length > 0
+                  ? `${state.completedParts.length} part${state.completedParts.length > 1 ? "s" : ""} already uploaded — resuming from where you left off.`
+                  : "No fully uploaded parts found (upload was < 1 chunk). Resuming from the beginning using the existing session."}
+              </p>
+            </div>
+          </section>
+        )}
+
         {/* ── Upload Progress ── */}
         {showStatus && state.totalBytes > 0 && (
           <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-3">

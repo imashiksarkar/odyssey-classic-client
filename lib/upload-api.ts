@@ -83,9 +83,9 @@ export const uploadApi = {
     signedUrl: string,
     chunk: Blob,
     onProgress?: (loaded: number) => void,
-  ): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
+  ): { promise: Promise<string>; xhr: XMLHttpRequest } => {
+    const xhr = new XMLHttpRequest();
+    const promise = new Promise<string>((resolve, reject) => {
       xhr.open("PUT", signedUrl);
 
       console.log(`[uploadPart] Starting XHR PUT, chunk size: ${chunk.size} bytes`);
@@ -127,11 +127,12 @@ export const uploadApi = {
       });
       xhr.addEventListener("abort", () => {
         console.warn("[uploadPart] XHR aborted");
-        reject(new Error("Part upload aborted"));
+        reject(new Error("__ABORTED__"));
       });
 
       xhr.send(chunk);
     });
+    return { promise, xhr };
   },
 
   complete: async (
