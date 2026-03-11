@@ -121,6 +121,10 @@ export const useFileUpload = () => {
           if (!completedPartNumbers.has(i)) queue.push(i);
         }
 
+        // Tracks in-flight bytes for each part currently being uploaded.
+        // Summed with completed-parts bytes to give real-time progress.
+        const partProgressMap = new Map<number, number>();
+
         patchState({ status: "uploading" });
 
         // Pre-fetch signed URLs for ALL pending parts in a single request.
@@ -158,7 +162,21 @@ export const useFileUpload = () => {
                       partNumber,
                     );
 
-              const etag = await uploadApi.uploadPart(signedUrl, chunk);
+              const etag = await uploadApi.uploadPart(
+                signedUrl,
+                chunk,
+                (loaded) => {
+                  partProgressMap.set(partNumber, loaded);
+                  const inFlight = [...partProgressMap.values()].reduce(
+                    (sum, v) => sum + v,
+                    0,
+                  );
+                  patchState({
+                    uploadedBytes: completedParts.length * chunkSize + inFlight,
+                  });
+                },
+              );
+              partProgressMap.delete(partNumber);
               completedParts = [...completedParts, { partNumber, etag }];
               patchState({
                 completedParts,
