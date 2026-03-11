@@ -13,7 +13,89 @@ const generateCuid = () => {
   );
 };
 
+// ─── Asset & Version types ────────────────────────────────────────────────────
+
+export interface Asset {
+  id: string;
+  name: string;
+  orgId: string;
+  assetType: "UNREAL_PROJECT" | "OTHER_3D";
+  sourceType: string;
+  uploadStatus: string;
+  validationStatus: string;
+  buildStatus: string;
+  storageBucket: string;
+  storagePath: string;
+  createdAt: string;
+  updatedAt: string;
+  unrealProjects?: UnrealProject[];
+  other3d?: Other3d[];
+}
+
+export interface UnrealProject {
+  assetId: string;
+  orgId: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+  unrealProjectVersion: string;
+  unrealPluginVersion: string;
+  versions?: UnrealProjectVersion[];
+}
+
+export interface Other3d {
+  assetId: string;
+  orgId: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+  unrealPluginVersion: string;
+}
+
+export interface UnrealProjectVersion {
+  id: string;
+  orgId: string;
+  name: string;
+  state: string;
+  selfPackaged: boolean;
+  target: string;
+  unrealEngineVersion?: string;
+  volumeRegions: string[];
+  volumeCopyRegionsComplete: string[];
+  volumeSizeGb: number;
+  appType: string;
+  buildRegion?: string;
+  levelName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Upload API ───────────────────────────────────────────────────────────────
+
 export const uploadApi = {
+  // ── Asset list & detail ──────────────────────────────────────────────────
+
+  getAllAssets: async (): Promise<Asset[]> => {
+    const res = await axios.get(`${API_BASE}/assets`);
+    return res.data.data;
+  },
+
+  getAsset: async (assetId: string): Promise<Asset> => {
+    const res = await axios.get(`${API_BASE}/assets/${assetId}`);
+    return res.data.data;
+  },
+
+  getVersionsByAsset: async (
+    assetId: string,
+  ): Promise<UnrealProjectVersion[]> => {
+    const res = await axios.get(
+      `${API_BASE}/unrealProjectVersion/asset/${assetId}`,
+    );
+    return res.data.data;
+  },
+
+  // ── Upload flow ──────────────────────────────────────────────────────────
+
   initiate: async (
     file: File,
     formData: UploadFormData,
