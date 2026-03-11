@@ -92,6 +92,7 @@ export default function AssetDetailPage() {
 
   // Priority: query param from fresh upload → latest version from API
   const shownVersionId = versionIdParam ?? versions[0]?.id;
+  console.log(versions);
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
