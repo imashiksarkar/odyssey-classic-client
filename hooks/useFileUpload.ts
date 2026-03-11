@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { uploadApi } from "@/lib/upload-api";
 import {
   INITIAL_UPLOAD_STATE,
@@ -19,6 +19,13 @@ export const useFileUpload = () => {
   const [state, setState] = useState<UploadState>(INITIAL_UPLOAD_STATE);
   const controlRef = useRef({ shouldStop: false });
 
+  // Stable refs so persistent event listeners (online) always read latest values
+  // without needing them in dependency arrays.
+  const latestStateRef = useRef(state);
+  const latestFileRef = useRef(file);
+  latestStateRef.current = state;
+  latestFileRef.current = file;
+
   const patchState = useCallback((patch: Partial<UploadState>) => {
     setState((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -36,13 +43,16 @@ export const useFileUpload = () => {
     if (!selected) return;
     setFile(selected);
 
+    console.log(`[handleFileSelect] Looking for active session: "${selected.name}"`);
     const session = await uploadApi.getSession(selected.name);
     if (session) {
+      console.log(`[handleFileSelect] Session found — recovering parts from GCS`, session);
       // Recover actual uploaded parts from GCS — source-of-truth after any disconnect
       const completedParts = await uploadApi.listParts(
         session.objectName,
         session.uploadId,
       );
+      console.log(`[handleFileSelect] Recovered ${completedParts.length} completed parts — ready to resume`);
       const chunkSize = getChunkSize(selected.size);
       setState({
         ...INITIAL_UPLOAD_STATE,
@@ -59,6 +69,7 @@ export const useFileUpload = () => {
         createdAt: Date.now(),
       });
     } else {
+      console.log(`[handleFileSelect] No active session found for "${selected.name}" — starting fresh`);
       setState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
     }
   };
@@ -253,6 +264,11 @@ export const useFileUpload = () => {
     volumeRegions: ["ORD1", "LGA1", "LAS1"],
   });
 
+  // Keep a stable ref to performUpload so the wifi-reconnect handler
+  // (registered once with empty deps) can always call the latest version.
+  const performUploadRef = useRef(performUpload);
+  performUploadRef.current = performUpload;
+
   const [formData, setFormDataState] = useState<UploadFormData>(
     formDataRef.current,
   );
@@ -270,8 +286,10 @@ export const useFileUpload = () => {
 
   const handlePause = () => {
     controlRef.current.shouldStop = true;
-    // Pool workers check shouldStop before each part; status set to "paused"
-    // inside performUpload after the pool exits.
+    // Set status immediately so the Resume button appears right away.
+    // Workers will finish their current in-flight part then stop — the
+    // completed bytes from those parts are saved normally.
+    patchState({ status: "paused" });
   };
 
   const handleResume = () => {
@@ -313,6 +331,29 @@ export const useFileUpload = () => {
     setFile(null);
     setState(INITIAL_UPLOAD_STATE);
   };
+
+  // ── Wifi reconnect: auto-resume if upload was interrupted by network loss ──
+  // Registered once (empty deps). Reads latest state/file from refs to avoid
+  // stale closures. Only fires when the browser transitions from offline→online.
+  useEffect(() => {
+    const onOnline = () => {
+      const s = latestStateRef.current;
+      const f = latestFileRef.current;
+      if (s.status === "failed" && s.uploadId && s.assetId && f) {
+        console.log(
+          `[useFileUpload] Network reconnected — auto-resuming from ${
+            s.completedParts?.length ?? 0
+          } completed parts`,
+        );
+        // Resume using current completed parts as checkpoint.
+        // GCS is the source of truth: any part that received an ETag before
+        // the disconnect is in completedParts and won't be re-uploaded.
+        performUploadRef.current(f, { ...s, error: null });
+      }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []); // stable — reads from refs, no deps needed
 
   const progress =
     state.totalBytes > 0
