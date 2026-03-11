@@ -161,22 +161,39 @@ export const uploadApi = {
     return res.data.data.signedUrls;
   },
 
-  uploadPart: async (signedUrl: string, chunk: Blob): Promise<string> => {
-    const res = await fetch(signedUrl, {
-      method: "PUT",
-      body: chunk,
+  uploadPart: (
+    signedUrl: string,
+    chunk: Blob,
+    onProgress?: (loaded: number) => void,
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", signedUrl);
+
+      if (onProgress) {
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) onProgress(e.loaded);
+        });
+      }
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const etag = xhr.getResponseHeader("ETag");
+          if (!etag) {
+            reject(new Error("No ETag in response — check CORS exposes ETag header"));
+            return;
+          }
+          resolve(etag.replace(/"/g, ""));
+        } else {
+          reject(new Error(`Part upload failed with status ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener("error", () => reject(new Error("Part upload network error")));
+      xhr.addEventListener("abort", () => reject(new Error("Part upload aborted")));
+
+      xhr.send(chunk);
     });
-
-    if (!res.ok) {
-      throw new Error(`Part upload failed with status ${res.status}`);
-    }
-
-    const etag = res.headers.get("ETag");
-    if (!etag) {
-      throw new Error("No ETag in response — check CORS exposes ETag header");
-    }
-
-    return etag.replace(/"/g, "");
   },
 
   complete: async (

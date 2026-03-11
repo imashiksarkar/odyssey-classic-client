@@ -7,7 +7,6 @@ import {
   getChunkSize,
   type UploadState,
   type UploadFormData,
-  ,
 } from "@/lib/asset.type";
 
 // 10 concurrent part-upload workers. Each uploads directly to GCS in parallel.
