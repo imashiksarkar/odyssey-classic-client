@@ -12,7 +12,7 @@ import {
 // 10 concurrent part-upload workers. Each uploads directly to GCS in parallel.
 // The bottleneck is outbound bandwidth, not CPU, so more workers = faster uploads.
 const MAX_WORKERS = 10;
-const MAX_RETRIES = 6; // Higher to survive a brief wifi drop + reconnect
+const MAX_RETRIES = 3;
 
 export const useFileUpload = () => {
   const [file, setFile] = useState<File | null>(null);
