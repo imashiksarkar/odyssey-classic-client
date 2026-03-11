@@ -314,6 +314,20 @@ export default function AssetManagerPage() {
   const confirmedPct = state.totalBytes > 0 ? (confirmedBytes / state.totalBytes) * 100 : 0;
   const totalParts = chunkSize > 0 ? Math.ceil(state.totalBytes / chunkSize) : 0;
 
+  // displayedPct only ever increases — never drops on pause or resume.
+  // While uploading: tracks real in-flight bytes (smooth ~100ms updates).
+  // When paused: freezes at the highest value seen.
+  // On resume: continues upward from where it was, never backward.
+  const [displayedPct, setDisplayedPct] = useState(0);
+  useEffect(() => {
+    if (state.status === "idle") {
+      setDisplayedPct(0);
+      return;
+    }
+    const live = isUploading ? progress : confirmedPct;
+    setDisplayedPct((prev) => Math.max(prev, live));
+  }, [progress, confirmedPct, isUploading, state.status]);
+
   const uploadStatusColor =
     state.status === "failed"
       ? "text-red-400"
@@ -486,20 +500,28 @@ export default function AssetManagerPage() {
                 Upload Progress
               </h2>
               <span className={`text-sm font-bold ${uploadStatusColor}`}>
-                {confirmedPct.toFixed(1)}%
+                {displayedPct.toFixed(1)}%
               </span>
             </div>
 
-            {/* Bar — GCS-confirmed bytes only. Pause at X% = resume from X%, always. */}
+            {/* Bar: displayedPct (never decreases) fills the bar.
+                Confirmed sub-layer (solid) shows what GCS saved.
+                In-flight layer (faded) fills ahead up to displayedPct. */}
             <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden relative">
+              {/* Confirmed — solid, GCS-saved bytes */}
               <div
-                className={`h-full rounded-full absolute left-0 top-0 transition-all duration-500 ${progressBarColor}`}
+                className={`h-full rounded-full absolute left-0 top-0 transition-all duration-300 ${progressBarColor}`}
                 style={{ width: `${Math.max(confirmedPct, 0)}%` }}
-              >
-                {isUploading && (
+              />
+              {/* In-flight ahead of confirmed — faded, real transmitted bytes */}
+              {isUploading && displayedPct > confirmedPct && (
+                <div
+                  className={`h-full rounded-full absolute left-0 top-0 transition-all duration-150 ${progressBarColor} opacity-40`}
+                  style={{ width: `${Math.max(displayedPct, 0)}%` }}
+                >
                   <span className="absolute right-0 top-0 h-full w-3 bg-white/30 animate-pulse rounded-r-full" />
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between">
@@ -512,9 +534,6 @@ export default function AssetManagerPage() {
                 {(confirmedBytes / 1024 / 1024).toFixed(1)} / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB
                 {totalParts > 0 && (
                   <span className="text-zinc-700"> · {state.completedParts.length}/{totalParts} parts</span>
-                )}
-                {isUploading && (state.uploadedBytes - confirmedBytes) > 0 && (
-                  <span className="text-zinc-700"> · {((state.uploadedBytes - confirmedBytes) / 1024 / 1024).toFixed(1)} MB uploading</span>
                 )}
               </span>
             </div>
