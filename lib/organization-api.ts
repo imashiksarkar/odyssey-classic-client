@@ -311,6 +311,21 @@ export const organizationApi = {
     return normalizeOrganizationInvites(payload);
   },
 
+  async getPendingOrganizationInviteByInviteId(
+    inviteId: string,
+    accessToken?: string,
+  ) {
+    const payload = await request<unknown>(
+      {
+        method: "GET",
+        url: `/organizations-invite/pending-user-by-invite/${inviteId}`,
+      },
+      accessToken,
+    );
+
+    return normalizeOrganizationInvite(payload);
+  },
+
   async getOrganizationLogoUploadUrl(fileType: string, accessToken?: string) {
     const payload = await request<unknown>(
       {
