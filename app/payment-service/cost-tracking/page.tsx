@@ -436,13 +436,13 @@ const CostTrackingPage = () => {
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-slate-500">Cost Of Usage</p>
                 <p className="mt-1 font-medium text-slate-900">
-                  {formatCurrency(selectedRecord.costOfUsage)}
+                  {formatCurrency(selectedRecord.costOfUsage / 100)}
                 </p>
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-slate-500">Cost Of SDK</p>
                 <p className="mt-1 font-medium text-slate-900">
-                  {formatCurrency(selectedRecord.costOfSdk)}
+                  {formatCurrency(selectedRecord.costOfSdk / 100)}
                 </p>
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -495,7 +495,7 @@ const CostTrackingPage = () => {
                           <td className="px-4 py-3">
                             {formatNumber(item.timeTracker)}
                           </td>
-                          <td className="px-4 py-3">{formatCurrency(item.cost)}</td>
+                          <td className="px-4 py-3">{formatCurrency(item.cost /100)}</td>
                           <td className="px-4 py-3">
                             {formatDateTime(item.createdAt)}
                           </td>
