@@ -3,14 +3,21 @@
 import { Button } from "@/components/ui/button";
 import sso from "@/config/sso";
 import { CheckCircle2, LogOut } from "lucide-react";
-import { use, useEffect, useState } from "react";
+import { ChangeEvent, use, useCallback, useEffect, useState } from "react";
 import { AuthContext } from "./auth-wrapper";
 import Link from "next/link";
+import Image from "next/image";
+import { Input } from "@/components/ui/input";
 
 const Home = () => {
   const [focus, setFocus] = useState(0);
 
   const { user } = use(AuthContext);
+
+  const onChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) sso.avatarUpdate(file);
+  }, []);
 
   useEffect(() => {
     const focusHandler = () => setFocus(Math.random());
@@ -86,15 +93,23 @@ const Home = () => {
               {/* Profile Image */}
               <div className="shrink-0">
                 <div className="w-64 h-80 bg-card border border-border rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-24 h-24 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4">
-                      <span className="text-3xl font-semibold text-muted-foreground">
-                        A
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Profile Photo
-                    </p>
+                  <div className="w-64 h-96 bg-zinc-500 rounded-xl flex items-center justify-center shrink-0 relative overflow-hidden">
+                    <Image
+                      src={user.photoURL ?? ""}
+                      alt="avatar"
+                      width={300}
+                      height={300}
+                      className="w-full h-full object-cover absolute z-10 pointer-events-none"
+                    />
+                    <Input
+                      type="file"
+                      className="w-full h-full opacity-0 cursor-pointer"
+                      accept="image/*"
+                      onChange={onChange}
+                    />
+                    <span className="text-3xl absolute uppercase pointer-events-none z-20">
+                      Upload
+                    </span>
                   </div>
                 </div>
               </div>
