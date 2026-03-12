@@ -1241,7 +1241,7 @@ console.log("selectedOrgId",organizations, selectedOrganization)
                         </div>
                       ) : filteredPendingInvites.length === 0 ? (
                         <div className="px-4 py-8 text-white/55">
-                          No pending invites available in this session.
+                          No pending invites found for this organization.
                         </div>
                       ) : (
                         filteredPendingInvites.map((invite) => (
