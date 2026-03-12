@@ -48,6 +48,11 @@ const Home = () => {
                 Payment Service
               </Button>
             </Link>
+            <Link href="/organizations">
+              <Button variant="outline" size="sm">
+                Organizations
+              </Button>
+            </Link>
           </div>
 
           {user ? (

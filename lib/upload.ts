@@ -1,14 +1,17 @@
-// export const getChunkSize = (fileSizeBytes: number): number => {
-//   const GB = 1024 * 1024 * 1024;
-//   const MB = 1024 * 1024;
+// Dynamic chunk sizing — target ~200 parts per upload so confirmed progress moves
+// smoothly and the pause/resume gap stays ≤ ~5% (10 workers × chunkSize / fileSize).
+// GCS minimum part size is 5 MB for non-last parts.
+export const getChunkSize = (fileSizeBytes: number): number => {
+  const MB = 1024 * 1024;
+  const GB = 1024 * MB;
 
-//   if (fileSizeBytes < 100 * MB) return 8 * MB; // < 100MB  → 16MB chunks
-//   if (fileSizeBytes < 500 * MB) return 16 * MB; // < 500MB  → 32MB chunks
-//   if (fileSizeBytes < 1 * GB) return 32 * MB; // < 1GB    → 64MB chunks
-//   if (fileSizeBytes < 5 * GB) return 64 * MB; // < 5GB    → 128MB chunks
-//   return 128 * MB; // >= 5GB   → 256MB chunks
-// };
+  if (fileSizeBytes < 1 * GB)   return 5 * MB;    // < 1 GB   →   5 MB chunks (~200 parts max)
+  if (fileSizeBytes < 5 * GB)   return 25 * MB;   // < 5 GB   →  25 MB chunks (~205 parts max)
+  if (fileSizeBytes < 20 * GB)  return 100 * MB;  // < 20 GB  → 100 MB chunks (~205 parts max)
+  return 256 * MB;                                  // ≥ 20 GB  → 256 MB chunks (~200 parts for 50 GB)
+};
 
+// Legacy constant kept for any code that hasn't migrated to getChunkSize yet.
 export const CHUNK_SIZE = 8 * 1024 * 1024;
 
 export type UploadStatus =
@@ -40,6 +43,8 @@ export interface UploadState {
   createdAt: number | null;
   error: string | null;
   fileName: string | null;
+  // Set to true when a previous session is found on file re-select (page refresh / reconnect)
+  sessionRecovered: boolean;
 }
 
 export interface UploadFormData {
@@ -92,6 +97,7 @@ export const INITIAL_UPLOAD_STATE: UploadState = {
   createdAt: null,
   error: null,
   fileName: null,
+  sessionRecovered: false,
 };
 
 export function mapStateToStatus(state: string): ProjectStatus {

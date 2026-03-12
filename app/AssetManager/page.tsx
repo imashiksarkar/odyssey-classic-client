@@ -9,6 +9,7 @@ import {
   mapStateToStatus,
   getStatusLabel,
   getStateLabel,
+  getChunkSize,
   type ProjectVersionInfo,
   type ProjectStatus,
 } from "@/lib/upload";
@@ -308,6 +309,34 @@ export default function AssetManagerPage() {
   const showStatus = state.status !== "idle";
   const showProjectCard = state.status === "completed" && state.assetVersionId;
 
+  const chunkSize = state.totalBytes > 0 ? getChunkSize(state.totalBytes) : 0;
+  const confirmedBytes = state.completedParts.length * chunkSize;
+  const confirmedPct = state.totalBytes > 0 ? (confirmedBytes / state.totalBytes) * 100 : 0;
+  const totalParts = chunkSize > 0 ? Math.ceil(state.totalBytes / chunkSize) : 0;
+
+  // displayedPct only ever increases — never drops on pause or resume.
+  // While uploading: tracks real in-flight bytes (smooth ~100ms updates).
+  // When paused: freezes at the highest value seen.
+  // On resume: continues upward from where it was, never backward.
+  // Resets when idle OR when a new/recovered session starts (uploadId changes).
+  const [displayedPct, setDisplayedPct] = useState(0);
+  const prevUploadIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (state.status === "idle") {
+      setDisplayedPct(0);
+      prevUploadIdRef.current = null;
+      return;
+    }
+    // New session (fresh start or reselect after refresh) — reset to confirmed %
+    if (state.uploadId !== prevUploadIdRef.current) {
+      prevUploadIdRef.current = state.uploadId;
+      setDisplayedPct(confirmedPct);
+      return;
+    }
+    const live = isUploading ? progress : confirmedPct;
+    setDisplayedPct((prev) => Math.max(prev, live));
+  }, [progress, confirmedPct, isUploading, state.status, state.uploadId]);
+
   const uploadStatusColor =
     state.status === "failed"
       ? "text-red-400"
@@ -455,6 +484,23 @@ export default function AssetManagerPage() {
           )}
         </section>
 
+        {/* ── Session Recovery Banner ── */}
+        {state.sessionRecovered && state.status === "paused" && (
+          <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 py-3 flex items-start gap-3">
+            <span className="text-amber-400 text-base mt-0.5">⚡</span>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">
+                Previous upload session recovered
+              </p>
+              <p className="text-xs text-amber-400/80 mt-0.5">
+                {state.completedParts.length > 0
+                  ? `${state.completedParts.length} part${state.completedParts.length > 1 ? "s" : ""} confirmed by GCS — resuming from where you left off.`
+                  : `No completed chunks found in GCS. GCS only saves a chunk when the full ${Math.round(getChunkSize(state.totalBytes) / 1024 / 1024)} MB arrives — data in-flight when you paused was discarded. Resuming from the beginning with the same session ID.`}
+              </p>
+            </div>
+          </section>
+        )}
+
         {/* ── Upload Progress ── */}
         {showStatus && state.totalBytes > 0 && (
           <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-3">
@@ -463,20 +509,28 @@ export default function AssetManagerPage() {
                 Upload Progress
               </h2>
               <span className={`text-sm font-bold ${uploadStatusColor}`}>
-                {progress.toFixed(1)}%
+                {displayedPct.toFixed(1)}%
               </span>
             </div>
 
-            {/* Bar */}
-            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
+            {/* Bar: displayedPct (never decreases) fills the bar.
+                Confirmed sub-layer (solid) shows what GCS saved.
+                In-flight layer (faded) fills ahead up to displayedPct. */}
+            <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden relative">
+              {/* Confirmed — solid, GCS-saved bytes */}
               <div
-                className={`h-full rounded-full transition-all duration-300 ${progressBarColor} ${isUploading ? "relative" : ""}`}
-                style={{ width: `${Math.max(progress, 1)}%` }}
-              >
-                {isUploading && (
-                  <span className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
-                )}
-              </div>
+                className={`h-full rounded-full absolute left-0 top-0 transition-all duration-300 ${progressBarColor}`}
+                style={{ width: `${Math.max(confirmedPct, 0)}%` }}
+              />
+              {/* In-flight ahead of confirmed — faded, real transmitted bytes */}
+              {isUploading && displayedPct > confirmedPct && (
+                <div
+                  className={`h-full rounded-full absolute left-0 top-0 transition-all duration-150 ${progressBarColor} opacity-40`}
+                  style={{ width: `${Math.max(displayedPct, 0)}%` }}
+                >
+                  <span className="absolute right-0 top-0 h-full w-3 bg-white/30 animate-pulse rounded-r-full" />
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between">
@@ -486,8 +540,12 @@ export default function AssetManagerPage() {
                 {state.status}
               </span>
               <span className="text-xs text-zinc-500">
-                {(state.uploadedBytes / 1024 / 1024).toFixed(1)} /{" "}
-                {(state.totalBytes / 1024 / 1024).toFixed(1)} MB
+                {/* While uploading: show in-flight bytes (matches the % shown above).
+                    When paused/done: show confirmed bytes (what GCS actually saved). */}
+                {((isUploading ? state.uploadedBytes : confirmedBytes) / 1024 / 1024).toFixed(1)} / {(state.totalBytes / 1024 / 1024).toFixed(1)} MB
+                {totalParts > 0 && (
+                  <span className="text-zinc-700"> · {state.completedParts.length}/{totalParts} parts</span>
+                )}
               </span>
             </div>
 

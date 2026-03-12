@@ -56,22 +56,83 @@ export const uploadApi = {
     return res.data.data.signedUrl;
   },
 
-  uploadPart: async (signedUrl: string, chunk: Blob): Promise<string> => {
-    const res = await fetch(signedUrl, {
-      method: "PUT",
-      body: chunk,
+  /**
+   * Get signed URLs for multiple parts in one request.
+   * Returns a map of partNumber → signedUrl.
+   */
+  batchGetSignedUrls: async (
+    orgId: string,
+    assetId: string,
+    assetVersionId: string,
+    uploadId: string,
+    objectName: string,
+    partNumbers: number[],
+  ): Promise<Record<number, string>> => {
+    const res = await axios.post(`${API_BASE}/uploader/batch-signed-urls`, {
+      orgId,
+      assetId,
+      assetVersionId,
+      uploadId,
+      objectName,
+      partNumbers,
     });
+    return res.data.data.signedUrls;
+  },
 
-    if (!res.ok) {
-      throw new Error(`Part upload failed with status ${res.status}`);
-    }
+  uploadPart: (
+    signedUrl: string,
+    chunk: Blob,
+    onProgress?: (loaded: number) => void,
+  ): { promise: Promise<string>; xhr: XMLHttpRequest } => {
+    const xhr = new XMLHttpRequest();
+    const promise = new Promise<string>((resolve, reject) => {
+      xhr.open("PUT", signedUrl);
 
-    const etag = res.headers.get("ETag");
-    if (!etag) {
-      throw new Error("No ETag in response — check CORS exposes ETag header");
-    }
+      console.log(`[uploadPart] Starting XHR PUT, chunk size: ${chunk.size} bytes`);
 
-    return etag.replace(/"/g, "");
+      if (onProgress) {
+        xhr.upload.addEventListener("progress", (e) => {
+          console.log(`[uploadPart] progress — loaded: ${e.loaded}, total: ${e.total}, computable: ${e.lengthComputable}`);
+          if (e.lengthComputable) onProgress(e.loaded);
+        });
+      } else {
+        console.warn("[uploadPart] No onProgress callback provided — progress won't be tracked");
+      }
+
+      xhr.upload.addEventListener("loadstart", () =>
+        console.log("[uploadPart] XHR upload loadstart"),
+      );
+      xhr.upload.addEventListener("loadend", () =>
+        console.log("[uploadPart] XHR upload loadend"),
+      );
+
+      xhr.addEventListener("load", () => {
+        console.log(`[uploadPart] XHR load — status: ${xhr.status}`);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const etag = xhr.getResponseHeader("ETag");
+          console.log(`[uploadPart] ETag received: ${etag}`);
+          if (!etag) {
+            reject(new Error("No ETag in response — check CORS exposes ETag header"));
+            return;
+          }
+          resolve(etag.replace(/"/g, ""));
+        } else {
+          reject(new Error(`Part upload failed with status ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener("error", () => {
+        console.error("[uploadPart] XHR network error");
+        reject(new Error("Part upload network error"));
+      });
+      xhr.addEventListener("abort", () => {
+        console.warn("[uploadPart] XHR aborted");
+        reject(new Error("__ABORTED__"));
+      });
+
+      xhr.send(chunk);
+    });
+    return { promise, xhr };
   },
 
   complete: async (
@@ -110,6 +171,49 @@ export const uploadApi = {
       uploadId,
       objectName,
     });
+  },
+
+  /**
+   * Check the backend for an in-progress upload session matching this filename.
+   * Returns session info if found, null otherwise.
+   * Used on file-select to enable resume without localStorage.
+   */
+  getSession: async (
+    filename: string,
+  ): Promise<{
+    orgId: string;
+    assetId: string;
+    assetVersionId: string;
+    uploadId: string;
+    objectName: string;
+  } | null> => {
+    try {
+      const res = await axios.get(`${API_BASE}/uploader/session`, {
+        params: { filename },
+      });
+      return res.data.data;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * List parts already uploaded to GCS for a multipart upload.
+   * Gives the exact progress after a wifi disconnect or page refresh.
+   */
+  listParts: async (
+    objectName: string,
+    uploadId: string,
+  ): Promise<{ partNumber: number; etag: string }[]> => {
+    try {
+      const res = await axios.post(`${API_BASE}/uploader/list-parts`, {
+        objectName,
+        uploadId,
+      });
+      return res.data.data.parts ?? [];
+    } catch {
+      return [];
+    }
   },
 
   getProjectVersion: async (
