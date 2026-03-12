@@ -38,6 +38,48 @@ type ServicePlansApiResponse = {
   data: ProductService[];
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (axios.isAxiosError(error)) {
+    const responseData = error.response?.data;
+
+    if (typeof responseData === "string" && responseData.trim()) {
+      return responseData;
+    }
+
+    if (
+      responseData &&
+      typeof responseData === "object" &&
+      "message" in responseData
+    ) {
+      const message = (responseData as { message?: unknown }).message;
+
+      if (Array.isArray(message)) {
+        const joinedMessage = message
+          .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          .join(", ");
+
+        if (joinedMessage) {
+          return joinedMessage;
+        }
+      }
+
+      if (typeof message === "string" && message.trim()) {
+        return message;
+      }
+    }
+
+    if (error.message) {
+      return error.message;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+};
+
 const formatServiceType = (value: string) =>
   value
     .toLowerCase()
@@ -47,6 +89,12 @@ const formatServiceType = (value: string) =>
 
 const formatPrice = (cents: number, suffix: string) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}${suffix}`;
+
+const getVisibleProducts = (products: Product[]) =>
+  products.filter((product) => Number(product.totalUsdCents || 0) > 0);
+
+const getTrialProducts = (products: Product[]) =>
+  products.filter((product) => Number(product.totalUsdCents || 0) === 0);
 
 const formatTrialLimit = (trialLimit: UsageTrialLimitation | null) => {
   if (!trialLimit) {
@@ -119,7 +167,7 @@ const SdkPlanPage = () => {
         setServicePlans(res.data?.data || []);
       } catch (error) {
         console.error("Failed to fetch service plans", error);
-        setErrorMessage("Failed to load SDK plans.");
+        setErrorMessage(getErrorMessage(error, "Failed to load SDK plans."));
       } finally {
         setIsLoading(false);
       }
@@ -165,7 +213,7 @@ const SdkPlanPage = () => {
       window.location.href = checkoutUrl;
     } catch (error) {
       console.error("Failed to create subscription", error);
-      setErrorMessage("Failed to start checkout.");
+      setErrorMessage(getErrorMessage(error, "Failed to start checkout."));
     } finally {
       setBuyingServiceType(null);
     }
@@ -178,14 +226,16 @@ const SdkPlanPage = () => {
       {isLoading && <p className="text-sm text-slate-600">Loading plans...</p>}
       {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
 
-      {!isLoading && !errorMessage && servicePlans.length === 0 && (
+      {!isLoading && servicePlans.length === 0 && (
         <p className="text-sm text-slate-600">No plans found.</p>
       )}
 
-      {!isLoading && !errorMessage && servicePlans.length > 0 && (
+      {!isLoading && servicePlans.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {servicePlans.map((servicePlan) => {
-            const minimumTrialDays = getMinimumTrialDays(servicePlan.products);
+            const visibleProducts = getVisibleProducts(servicePlan.products);
+            const trialProducts = getTrialProducts(servicePlan.products);
+            const minimumTrialDays = getMinimumTrialDays(trialProducts);
             const trialLimits = formatTrialLimit(servicePlan.trialLimit);
 
             return (
@@ -202,7 +252,7 @@ const SdkPlanPage = () => {
                       Trial Period: {minimumTrialDays > 0 ? `${minimumTrialDays} days` : "No trial"}
                     </span>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
-                      {servicePlan.products.length} products
+                      {visibleProducts.length} products
                     </span>
                   </div>
                 </div>
@@ -235,13 +285,13 @@ const SdkPlanPage = () => {
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium text-slate-700">Plan Details</h3>
 
-                  {servicePlan.products.length === 0 && (
+                  {visibleProducts.length === 0 && (
                     <p className="text-sm text-slate-500">No plans for this service.</p>
                   )}
 
-                  {servicePlan.products.length > 0 && (
+                  {visibleProducts.length > 0 && (
                     <ul className="space-y-2">
-                      {servicePlan.products.map((product) => (
+                      {visibleProducts.map((product) => (
                         <li
                           key={product.id}
                           className="border border-slate-200 rounded-md px-3 py-2"
@@ -264,7 +314,7 @@ const SdkPlanPage = () => {
                     </ul>
                   )}
 
-                  {servicePlan.products.length > 0 && (
+                  {visibleProducts.length > 0 && (
                     <button
                       type="button"
                       onClick={() => handleBuyPlan(servicePlan.serviceType)}
