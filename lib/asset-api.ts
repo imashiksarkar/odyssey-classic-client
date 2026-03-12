@@ -170,15 +170,21 @@ export const uploadApi = {
     const promise = new Promise<string>((resolve, reject) => {
       xhr.open("PUT", signedUrl);
 
-      console.log(`[uploadPart] Starting XHR PUT, chunk size: ${chunk.size} bytes`);
+      console.log(
+        `[uploadPart] Starting XHR PUT, chunk size: ${chunk.size} bytes`,
+      );
 
       if (onProgress) {
         xhr.upload.addEventListener("progress", (e) => {
-          console.log(`[uploadPart] progress — loaded: ${e.loaded}, total: ${e.total}, computable: ${e.lengthComputable}`);
+          console.log(
+            `[uploadPart] progress — loaded: ${e.loaded}, total: ${e.total}, computable: ${e.lengthComputable}`,
+          );
           if (e.lengthComputable) onProgress(e.loaded);
         });
       } else {
-        console.warn("[uploadPart] No onProgress callback provided — progress won't be tracked");
+        console.warn(
+          "[uploadPart] No onProgress callback provided — progress won't be tracked",
+        );
       }
 
       xhr.upload.addEventListener("loadstart", () =>
@@ -194,7 +200,9 @@ export const uploadApi = {
           const etag = xhr.getResponseHeader("ETag");
           console.log(`[uploadPart] ETag received: ${etag}`);
           if (!etag) {
-            reject(new Error("No ETag in response — check CORS exposes ETag header"));
+            reject(
+              new Error("No ETag in response — check CORS exposes ETag header"),
+            );
             return;
           }
           resolve(etag.replace(/"/g, ""));

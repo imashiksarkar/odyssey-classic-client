@@ -207,7 +207,8 @@ export const useFileUpload = () => {
                 partProgressMap.delete(partNumber);
                 // __ABORTED__ means pause was clicked — stop silently, part not saved.
                 // Worker exits; resume will re-queue this part.
-                if (err instanceof Error && err.message === "__ABORTED__") return;
+                if (err instanceof Error && err.message === "__ABORTED__")
+                  return;
                 throw err;
               }
               activeXhrsRef.current.delete(xhr);
