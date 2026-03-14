@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { uploadApi } from "@/lib/upload-api";
+import { uploadApi } from "@/lib/asset-api";
 import {
   INITIAL_UPLOAD_STATE,
   getChunkSize,
   type UploadState,
   type UploadFormData,
-} from "@/lib/upload";
+} from "@/lib/asset.type";
 
 // 10 concurrent part-upload workers. Each uploads directly to GCS in parallel.
 // The bottleneck is outbound bandwidth, not CPU, so more workers = faster uploads.
@@ -38,23 +38,28 @@ export const useFileUpload = () => {
    * This replaces localStorage — works after page refresh, wifi disconnect,
    * or even switching browsers on the same account.
    */
-  const handleFileSelect = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
     setFile(selected);
 
-    console.log(`[handleFileSelect] Looking for active session: "${selected.name}"`);
+    console.log(
+      `[handleFileSelect] Looking for active session: "${selected.name}"`,
+    );
     const session = await uploadApi.getSession(selected.name);
     if (session) {
-      console.log(`[handleFileSelect] Session found — recovering parts from GCS`, session);
+      console.log(
+        `[handleFileSelect] Session found — recovering parts from GCS`,
+        session,
+      );
       // Recover actual uploaded parts from GCS — source-of-truth after any disconnect
       const completedParts = await uploadApi.listParts(
         session.objectName,
         session.uploadId,
       );
-      console.log(`[handleFileSelect] Recovered ${completedParts.length} completed parts — ready to resume`);
+      console.log(
+        `[handleFileSelect] Recovered ${completedParts.length} completed parts — ready to resume`,
+      );
       const chunkSize = getChunkSize(selected.size);
       setState({
         ...INITIAL_UPLOAD_STATE,
@@ -72,7 +77,9 @@ export const useFileUpload = () => {
         sessionRecovered: true,
       });
     } else {
-      console.log(`[handleFileSelect] No active session found for "${selected.name}" — starting fresh`);
+      console.log(
+        `[handleFileSelect] No active session found for "${selected.name}" — starting fresh`,
+      );
       setState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
     }
   };
@@ -138,7 +145,6 @@ export const useFileUpload = () => {
         // Tracks in-flight bytes for each part currently being uploaded.
         // Summed with completed-parts bytes to give real-time progress.
         const partProgressMap = new Map<number, number>();
-        console.log(`[useFileUpload] Starting upload — totalParts: ${totalParts}, pending: ${queue.length}, chunkSize: ${chunkSize} bytes`);
 
         patchState({ status: "uploading" });
 
@@ -186,6 +192,9 @@ export const useFileUpload = () => {
                     (sum, v) => sum + v,
                     0,
                   );
+                  patchState({
+                    uploadedBytes: completedParts.length * chunkSize + inFlight,
+                  });
                   const uploadedBytes = completedParts.length * chunkSize + inFlight;
                   console.log(`[useFileUpload] part ${partNumber} in-flight: ${loaded}B | total uploadedBytes: ${uploadedBytes}`);
                   patchState({ uploadedBytes });
@@ -200,7 +209,8 @@ export const useFileUpload = () => {
                 partProgressMap.delete(partNumber);
                 // __ABORTED__ means pause was clicked — stop silently, part not saved.
                 // Worker exits; resume will re-queue this part.
-                if (err instanceof Error && err.message === "__ABORTED__") return;
+                if (err instanceof Error && err.message === "__ABORTED__")
+                  return;
                 throw err;
               }
               activeXhrsRef.current.delete(xhr);
@@ -218,7 +228,9 @@ export const useFileUpload = () => {
               // If we're offline, wait until the browser reports online before
               // retrying — no point hammering with retries while disconnected.
               if (!navigator.onLine) {
-                console.log(`[uploadPart] Offline — waiting for reconnect before retry (attempt ${attempts})`);
+                console.log(
+                  `[uploadPart] Offline — waiting for reconnect before retry (attempt ${attempts})`,
+                );
                 await new Promise<void>((resolve) => {
                   const onOnline = () => {
                     window.removeEventListener("online", onOnline);
@@ -226,7 +238,9 @@ export const useFileUpload = () => {
                   };
                   window.addEventListener("online", onOnline);
                 });
-                console.log(`[uploadPart] Back online — retrying part ${partNumber}`);
+                console.log(
+                  `[uploadPart] Back online — retrying part ${partNumber}`,
+                );
               } else {
                 await new Promise((r) => setTimeout(r, 1000 * attempts));
               }
@@ -319,7 +333,9 @@ export const useFileUpload = () => {
     // Abort all in-flight XHRs immediately — stops progress events and frees bandwidth.
     // Each aborted XHR resolves to __ABORTED__ error which is caught silently in uploadPart.
     // Completed parts are already saved in completedParts; aborted parts will be re-uploaded on resume.
-    console.log(`[handlePause] Aborting ${activeXhrsRef.current.size} in-flight XHRs`);
+    console.log(
+      `[handlePause] Aborting ${activeXhrsRef.current.size} in-flight XHRs`,
+    );
     activeXhrsRef.current.forEach((xhr) => xhr.abort());
     activeXhrsRef.current.clear();
     patchState({ status: "paused" });
@@ -342,7 +358,9 @@ export const useFileUpload = () => {
 
   const handleAbort = async () => {
     // Kill all in-flight XHRs immediately — stops data flowing to GCS right now.
-    console.log(`[handleAbort] Aborting ${activeXhrsRef.current.size} in-flight XHRs`);
+    console.log(
+      `[handleAbort] Aborting ${activeXhrsRef.current.size} in-flight XHRs`,
+    );
     activeXhrsRef.current.forEach((xhr) => xhr.abort());
     activeXhrsRef.current.clear();
 

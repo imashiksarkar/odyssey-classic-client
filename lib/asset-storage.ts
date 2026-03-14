@@ -1,4 +1,4 @@
-import type { UploadState } from "./upload";
+import type { UploadState } from "./asset.type";
 
 // Upload state is now recovered from the backend on file re-select.
 // localStorage is no longer used — this module is kept for API compatibility
