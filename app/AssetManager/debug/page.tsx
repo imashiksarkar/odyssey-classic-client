@@ -12,13 +12,16 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface HealthData {
-  status: string;
   timestamp: string;
+  uptime: number;
+  environment: string;
+  redis: { status: string; connected: boolean };
 }
 
 interface RedisHealthData {
-  status: string;
-  latencyMs?: number;
+  connected: boolean;
+  message: string;
+  ping: string;
 }
 
 interface StateSnapshot {
@@ -100,8 +103,8 @@ function HealthSection() {
     return () => clearInterval(id);
   }, []);
 
-  const apiOk = !healthErr && health?.status === "ok";
-  const redisOk = !redisErr && redis?.status === "ok";
+  const apiOk = !healthErr && !!health?.timestamp;
+  const redisOk = !redisErr && redis?.connected === true;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
@@ -137,7 +140,7 @@ function HealthSection() {
               <Badge label="Unreachable" variant="error" />
             ) : health ? (
               <>
-                <Badge label={health?.status?.toUpperCase()} variant="ok" />
+                <Badge label="HEALTHY" variant="ok" />
                 <span className="text-xs text-gray-400 font-mono">
                   {new Date(health.timestamp).toLocaleTimeString()}
                 </span>
@@ -161,12 +164,13 @@ function HealthSection() {
               <Badge label="Unreachable" variant="error" />
             ) : redis ? (
               <>
-                <Badge label={redis?.status?.toUpperCase()} variant="ok" />
-                {redis.latencyMs !== undefined && (
-                  <span className="text-xs text-gray-400 font-mono">
-                    {redis.latencyMs}ms
-                  </span>
-                )}
+                <Badge
+                  label={redis.connected ? "CONNECTED" : "DISCONNECTED"}
+                  variant={redis.connected ? "ok" : "error"}
+                />
+                <span className="text-xs text-gray-400 font-mono">
+                  {redis.ping}
+                </span>
               </>
             ) : (
               <Badge label="…" variant="idle" />
