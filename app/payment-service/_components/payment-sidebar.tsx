@@ -10,8 +10,6 @@ const navItems = [
   { href: "/payment-service/sdk-keys", label: "SDK Keys" },
   { href: "/payment-service/cost-tracking", label: "Cost Tracking" },
   { href: "/payment-service/invoices", label: "Invoices" },
-  { href: "/payment-service/usage-per-unit", label: "Usage Per Unit" },
-  { href: "/payment-service/usage-trial-limit", label: "Usage Trial Limit" },
   { href: "/payment-service/storage-usage", label: "Storage Usage" },
 ];
 

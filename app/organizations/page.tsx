@@ -18,6 +18,8 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  FolderKanban,
+  LayoutGrid,
   LoaderCircle,
   LogOut,
   Pencil,
@@ -42,7 +44,11 @@ type MemberViewTab = "members" | "pending";
 const primaryCardClass =
   "rounded-[28px] border border-white/8 bg-[#0f131d]/90 shadow-[0_22px_80px_rgba(0,0,0,0.45)] backdrop-blur";
 
-const navItems = [{ label: "Organization settings", icon: Settings, href: "/organizations" }];
+const navItems = [
+  { label: "Projects", icon: LayoutGrid, href: "/organizations/projects" },
+  { label: "Spaces", icon: FolderKanban, href: "/organizations/spaces" },
+  { label: "Organization settings", icon: Settings, href: "/organizations" },
+];
 
 const getInitials = (value: string) =>
   value
@@ -1492,3 +1498,7 @@ console.log("selectedOrgId",organizations, selectedOrganization)
     </div>
   );
 }
+
+
+
+
