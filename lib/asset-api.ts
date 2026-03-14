@@ -1,36 +1,15 @@
-import axios from "axios";
 import type {
   InitResponse,
   ProjectVersionInfo,
   UploadFormData,
 } from "./asset.type";
+import assetManager from "@/config/assetManager";
+import type {
+  AssetWithRelations,
+  UnrealProjectVersion as SDKUnrealProjectVersion,
+} from "@newgameplusinc/odyssey-asset-manager-sdk";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
-
-const generateCuid = () => {
-  return (
-    "c" + Date.now().toString(36) + Math.random().toString(36).substring(2, 15)
-  );
-};
-
-// ─── Asset & Version types ────────────────────────────────────────────────────
-
-export interface Asset {
-  id: string;
-  name: string;
-  orgId: string;
-  assetType: "UNREAL_PROJECT" | "OTHER_3D";
-  sourceType: string;
-  uploadStatus: string;
-  validationStatus: string;
-  buildStatus: string;
-  storageBucket: string;
-  storagePath: string;
-  createdAt: string;
-  updatedAt: string;
-  unrealProjects?: UnrealProject[];
-  other3d?: Other3d[];
-}
+export type { AssetWithRelations as Asset } from "@newgameplusinc/odyssey-asset-manager-sdk";
 
 export interface UnrealProject {
   assetId: string;
@@ -70,28 +49,41 @@ export interface UnrealProjectVersion {
   updatedAt: string;
 }
 
-// ─── Upload API ───────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-export const uploadApi = {
+const generateCuid = () =>
+  "c" + Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
+
+/** SDK returns Date objects; pages expect ISO strings. Normalise here. */
+function normaliseVersion(v: SDKUnrealProjectVersion): UnrealProjectVersion {
+  return {
+    ...v,
+    createdAt:
+      v.createdAt instanceof Date ? v.createdAt.toISOString() : v.createdAt,
+    updatedAt:
+      v.updatedAt instanceof Date ? v.updatedAt.toISOString() : v.updatedAt,
+    unrealEngineVersion: v.unrealEngineVersion ?? undefined,
+    buildRegion: v.buildRegion ?? undefined,
+    levelName: v.levelName ?? undefined,
+  };
+}
+
+// ─── Asset API ───────────────────────────────────────────────────────────────
+
+export const assetApi = {
   // ── Asset list & detail ──────────────────────────────────────────────────
 
-  getAllAssets: async (): Promise<Asset[]> => {
-    const res = await axios.get(`${API_BASE}/assets`);
-    return res.data.data;
-  },
+  getAllAssets: (): Promise<AssetWithRelations[]> =>
+    assetManager.getAllAssets(),
 
-  getAsset: async (assetId: string): Promise<Asset> => {
-    const res = await axios.get(`${API_BASE}/assets/${assetId}`);
-    return res.data.data;
-  },
+  getAsset: (assetId: string): Promise<AssetWithRelations> =>
+    assetManager.getAsset(assetId),
 
   getVersionsByAsset: async (
     assetId: string,
   ): Promise<UnrealProjectVersion[]> => {
-    const res = await axios.get(
-      `${API_BASE}/unrealProjectVersion/asset/${assetId}`,
-    );
-    return res.data.data;
+    const versions = await assetManager.getVersionsByAsset(assetId);
+    return versions.map(normaliseVersion);
   },
 
   // ── Upload flow ──────────────────────────────────────────────────────────
@@ -101,66 +93,68 @@ export const uploadApi = {
     formData: UploadFormData,
   ): Promise<InitResponse> => {
     const orgId = generateCuid();
-    const body: Record<string, unknown> = {
+    const res = await assetManager.initiateUpload({
       orgId,
       assetType: formData.assetType,
       assetFilename: file.name,
       unrealProjectDisplayName: formData.displayName || file.name,
+      ...(formData.assetType === "UNREAL_PROJECT" && {
+        unrealEngineVersion: formData.unrealEngineVersion as
+          | "5.0.3"
+          | "5.2.1"
+          | undefined,
+        target: formData.target as "Development" | "Shipping" | undefined,
+        selfPackaged: formData.selfPackaged,
+        volumeRegions: ["ORD1", "LGA1", "LAS1"],
+      }),
+    });
+    return {
+      uploadId: res.uploadId,
+      objectName: res.objectName,
+      assetId: res.assetId,
+      assetVersionId: res.assetVersionId,
+      orgId: res.orgId,
     };
-
-    if (formData.assetType === "UNREAL_PROJECT") {
-      body.unrealEngineVersion = formData.unrealEngineVersion;
-      body.target = formData.target;
-      body.selfPackaged = formData.selfPackaged;
-      body.volumeRegions = ["ORD1", "LGA1", "LAS1"];
-    }
-
-    const res = await axios.post(`${API_BASE}/uploader/initiate`, body);
-    return res.data.data;
   },
 
-  getSignedUrl: async (
+  getSignedUrl: (
     orgId: string,
     assetId: string,
     assetVersionId: string,
     uploadId: string,
     objectName: string,
     partNumber: number,
-  ): Promise<string> => {
-    const res = await axios.post(`${API_BASE}/uploader/signed-url`, {
+  ): Promise<string> =>
+    assetManager.getSignedUrl(
       orgId,
       assetId,
       assetVersionId,
       uploadId,
       objectName,
       partNumber,
-    });
-    return res.data.data.signedUrl;
-  },
+    ),
 
-  /**
-   * Get signed URLs for multiple parts in one request.
-   * Returns a map of partNumber → signedUrl.
-   */
-  batchGetSignedUrls: async (
+  batchGetSignedUrls: (
     orgId: string,
     assetId: string,
     assetVersionId: string,
     uploadId: string,
     objectName: string,
     partNumbers: number[],
-  ): Promise<Record<number, string>> => {
-    const res = await axios.post(`${API_BASE}/uploader/batch-signed-urls`, {
+  ): Promise<Record<number, string>> =>
+    assetManager.batchGetSignedUrls(
       orgId,
       assetId,
       assetVersionId,
       uploadId,
       objectName,
       partNumbers,
-    });
-    return res.data.data.signedUrls;
-  },
+    ),
 
+  /**
+   * XHR-based part upload — kept outside the SDK because it needs
+   * fine-grained progress events and an abortable handle.
+   */
   uploadPart: (
     signedUrl: string,
     chunk: Blob,
@@ -176,15 +170,8 @@ export const uploadApi = {
 
       if (onProgress) {
         xhr.upload.addEventListener("progress", (e) => {
-          console.log(
-            `[uploadPart] progress — loaded: ${e.loaded}, total: ${e.total}, computable: ${e.lengthComputable}`,
-          );
           if (e.lengthComputable) onProgress(e.loaded);
         });
-      } else {
-        console.warn(
-          "[uploadPart] No onProgress callback provided — progress won't be tracked",
-        );
       }
 
       xhr.upload.addEventListener("loadstart", () =>
@@ -198,7 +185,6 @@ export const uploadApi = {
         console.log(`[uploadPart] XHR load — status: ${xhr.status}`);
         if (xhr.status >= 200 && xhr.status < 300) {
           const etag = xhr.getResponseHeader("ETag");
-          console.log(`[uploadPart] ETag received: ${etag}`);
           if (!etag) {
             reject(
               new Error("No ETag in response — check CORS exposes ETag header"),
@@ -211,14 +197,10 @@ export const uploadApi = {
         }
       });
 
-      xhr.addEventListener("error", () => {
-        console.error("[uploadPart] XHR network error");
-        reject(new Error("Part upload network error"));
-      });
-      xhr.addEventListener("abort", () => {
-        console.warn("[uploadPart] XHR aborted");
-        reject(new Error("__ABORTED__"));
-      });
+      xhr.addEventListener("error", () =>
+        reject(new Error("Part upload network error")),
+      );
+      xhr.addEventListener("abort", () => reject(new Error("__ABORTED__")));
 
       xhr.send(chunk);
     });
@@ -234,8 +216,8 @@ export const uploadApi = {
     objectName: string,
     parts: { partNumber: number; etag: string }[],
   ): Promise<void> => {
-    await axios.post(`${API_BASE}/uploader/complete`, {
-      assetType,
+    await assetManager.completeUpload({
+      assetType: assetType as "UNREAL_PROJECT" | "OTHER_3D",
       orgId,
       assetId,
       assetVersionId,
@@ -253,8 +235,8 @@ export const uploadApi = {
     uploadId: string,
     objectName: string,
   ): Promise<void> => {
-    await axios.post(`${API_BASE}/uploader/abort`, {
-      assetType,
+    await assetManager.abortUpload({
+      assetType: assetType as "UNREAL_PROJECT" | "OTHER_3D",
       orgId,
       assetId,
       assetVersionId,
@@ -263,12 +245,7 @@ export const uploadApi = {
     });
   },
 
-  /**
-   * Check the backend for an in-progress upload session matching this filename.
-   * Returns session info if found, null otherwise.
-   * Used on file-select to enable resume without localStorage.
-   */
-  getSession: async (
+  getSession: (
     filename: string,
   ): Promise<{
     orgId: string;
@@ -276,42 +253,31 @@ export const uploadApi = {
     assetVersionId: string;
     uploadId: string;
     objectName: string;
-  } | null> => {
-    try {
-      const res = await axios.get(`${API_BASE}/uploader/session`, {
-        params: { filename },
-      });
-      return res.data.data;
-    } catch {
-      return null;
-    }
-  },
+  } | null> => assetManager.getUploadSession(filename),
 
-  /**
-   * List parts already uploaded to GCS for a multipart upload.
-   * Gives the exact progress after a wifi disconnect or page refresh.
-   */
-  listParts: async (
+  listParts: (
     objectName: string,
     uploadId: string,
-  ): Promise<{ partNumber: number; etag: string }[]> => {
-    try {
-      const res = await axios.post(`${API_BASE}/uploader/list-parts`, {
-        objectName,
-        uploadId,
-      });
-      return res.data.data.parts ?? [];
-    } catch {
-      return [];
-    }
-  },
+  ): Promise<{ partNumber: number; etag: string }[]> =>
+    assetManager.listUploadedParts(objectName, uploadId),
 
   getProjectVersion: async (
     assetVersionId: string,
   ): Promise<ProjectVersionInfo> => {
-    const res = await axios.get(
-      `${API_BASE}/unrealProjectVersion/${assetVersionId}`,
-    );
-    return res.data.data;
+    const v = await assetManager.getProjectVersion(assetVersionId);
+    return {
+      id: v.id,
+      state: v.state,
+      selfPackaged: v.selfPackaged,
+      name: v.name,
+      unrealEngineVersion: v.unrealEngineVersion ?? undefined,
+      target: v.target,
+      volumeRegions: v.volumeRegions,
+      volumeCopyRegionsComplete: v.volumeCopyRegionsComplete,
+      createdAt:
+        v.createdAt instanceof Date ? v.createdAt.toISOString() : v.createdAt,
+      updatedAt:
+        v.updatedAt instanceof Date ? v.updatedAt.toISOString() : v.updatedAt,
+    };
   },
 };

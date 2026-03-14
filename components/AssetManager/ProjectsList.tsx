@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { uploadApi, type Asset } from "@/lib/asset-api";
+import { assetApi, type Asset } from "@/lib/asset-api";
 import { AssetCard } from "./AssetCard";
 
 export function ProjectsList() {
@@ -13,7 +13,7 @@ export function ProjectsList() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    uploadApi
+    assetApi
       .getAllAssets()
       .then(setAssets)
       .catch(() => setError("Failed to load projects"))

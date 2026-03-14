@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { uploadApi } from "@/lib/asset-api";
+import { assetApi } from "@/lib/asset-api";
 import {
   mapStateToPercent,
   mapStateToStatus,
@@ -78,7 +78,7 @@ export function VersionStatusCard({ versionId }: { versionId: string }) {
   useEffect(() => {
     const poll = async () => {
       try {
-        const data = await uploadApi.getProjectVersion(versionId);
+        const data = await assetApi.getProjectVersion(versionId);
         setInfo(data);
         if (isDone(data.state)) {
           if (intervalRef.current) clearInterval(intervalRef.current);
