@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { uploadApi } from "@/lib/asset-api";
+import { assetApi } from "@/lib/asset-api";
 import {
   INITIAL_UPLOAD_STATE,
   getChunkSize,
@@ -46,14 +46,14 @@ export const useFileUpload = () => {
     console.log(
       `[handleFileSelect] Looking for active session: "${selected.name}"`,
     );
-    const session = await uploadApi.getSession(selected.name);
+    const session = await assetApi.getSession(selected.name);
     if (session) {
       console.log(
         `[handleFileSelect] Session found — recovering parts from GCS`,
         session,
       );
       // Recover actual uploaded parts from GCS — source-of-truth after any disconnect
-      const completedParts = await uploadApi.listParts(
+      const completedParts = await assetApi.listParts(
         session.objectName,
         session.uploadId,
       );
@@ -105,7 +105,7 @@ export const useFileUpload = () => {
 
         // Initiate a new upload if no session exists in state
         if (!uploadId || !assetId || !versionId || !orgId) {
-          const initiated = await uploadApi.initiate(
+          const initiated = await assetApi.initiate(
             activeFile,
             formDataRef.current,
           );
@@ -152,7 +152,7 @@ export const useFileUpload = () => {
         // Previously: N round-trips to backend (one per part per worker).
         // Now: 1 request → backend generates all URLs in parallel → workers
         //      start uploading immediately without waiting for auth round-trips.
-        const signedUrlMap = await uploadApi.batchGetSignedUrls(
+        const signedUrlMap = await assetApi.batchGetSignedUrls(
           orgId,
           assetId,
           versionId,
@@ -174,7 +174,7 @@ export const useFileUpload = () => {
               const signedUrl =
                 attempts === 0
                   ? signedUrlMap[partNumber]
-                  : await uploadApi.getSignedUrl(
+                  : await assetApi.getSignedUrl(
                       orgId!,
                       assetId!,
                       versionId!,
@@ -183,7 +183,7 @@ export const useFileUpload = () => {
                       partNumber,
                     );
 
-              const { promise, xhr } = uploadApi.uploadPart(
+              const { promise, xhr } = assetApi.uploadPart(
                 signedUrl,
                 chunk,
                 (loaded) => {
@@ -195,8 +195,11 @@ export const useFileUpload = () => {
                   patchState({
                     uploadedBytes: completedParts.length * chunkSize + inFlight,
                   });
-                  const uploadedBytes = completedParts.length * chunkSize + inFlight;
-                  console.log(`[useFileUpload] part ${partNumber} in-flight: ${loaded}B | total uploadedBytes: ${uploadedBytes}`);
+                  const uploadedBytes =
+                    completedParts.length * chunkSize + inFlight;
+                  console.log(
+                    `[useFileUpload] part ${partNumber} in-flight: ${loaded}B | total uploadedBytes: ${uploadedBytes}`,
+                  );
                   patchState({ uploadedBytes });
                 },
               );
@@ -216,7 +219,9 @@ export const useFileUpload = () => {
               activeXhrsRef.current.delete(xhr);
               partProgressMap.delete(partNumber);
               completedParts = [...completedParts, { partNumber, etag }];
-              console.log(`[useFileUpload] part ${partNumber} complete — ${completedParts.length}/${totalParts} done`);
+              console.log(
+                `[useFileUpload] part ${partNumber} complete — ${completedParts.length}/${totalParts} done`,
+              );
               patchState({
                 completedParts,
                 uploadedBytes: completedParts.length * chunkSize,
@@ -280,7 +285,7 @@ export const useFileUpload = () => {
           (a, b) => a.partNumber - b.partNumber,
         );
 
-        await uploadApi.complete(
+        await assetApi.complete(
           formDataRef.current.assetType,
           orgId,
           assetId,
@@ -372,7 +377,7 @@ export const useFileUpload = () => {
     }
 
     try {
-      await uploadApi.abort(
+      await assetApi.abort(
         formData.assetType,
         orgId,
         assetId,
