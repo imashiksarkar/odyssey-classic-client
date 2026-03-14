@@ -82,13 +82,13 @@ function HealthSection() {
     setRedisErr(false);
     try {
       const h = await assetManager.getHealth();
-      setHealth(h);
+      setHealth(h as unknown as HealthData);
     } catch {
       setHealthErr(true);
     }
     try {
       const r = await assetManager.getRedisHealth();
-      setRedis(r);
+      setRedis(r as unknown as RedisHealthData);
     } catch {
       setRedisErr(true);
     }
@@ -97,10 +97,10 @@ function HealthSection() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     check();
     const id = setInterval(check, 15000);
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const apiOk = !healthErr && !!health?.timestamp;
