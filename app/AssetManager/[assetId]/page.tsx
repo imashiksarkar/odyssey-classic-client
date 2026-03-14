@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
-  uploadApi,
+  assetApi,
   type Asset,
   type UnrealProjectVersion,
 } from "@/lib/asset-api";
@@ -16,13 +16,17 @@ import {
   type ProjectStatus,
 } from "@/lib/asset.type";
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+export function timeAgo(date: string | Date) {
+  const d = new Date(date);
+  const now = new Date();
+
+  const seconds = Math.floor((now.getTime() - d.getTime()) / 1000);
+
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+
+  return `${Math.floor(seconds / 86400)}d ago`;
 }
 
 const VERSION_STATUS_BADGE: Record<ProjectStatus, string> = {
@@ -51,8 +55,8 @@ export default function AssetDetailPage() {
     const load = async () => {
       try {
         const [a, v] = await Promise.all([
-          uploadApi.getAsset(assetId),
-          uploadApi.getVersionsByAsset(assetId),
+          assetApi.getAsset(assetId),
+          assetApi.getVersionsByAsset(assetId),
         ]);
         setAsset(a);
         setVersions(v);
