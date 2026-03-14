@@ -4,7 +4,7 @@ import { AuthContext } from "@/app/auth-wrapper";
 import { OrganizationWorkspaceNav } from "@/components/organizations/OrganizationWorkspaceNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { type Asset, uploadApi } from "@/lib/asset-api";
+import { type Asset, uploadApi } from "@/lib/asset-test-api";
 import {
   type Organization,
   organizationApi,
