@@ -28,7 +28,6 @@ export const useFileUpload = () => {
   latestStateRef.current = state;
   latestFileRef.current = file;
 
-
   const patchState = useCallback((patch: Partial<UploadState>) => {
     setState((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -196,6 +195,9 @@ export const useFileUpload = () => {
                   patchState({
                     uploadedBytes: completedParts.length * chunkSize + inFlight,
                   });
+                  const uploadedBytes = completedParts.length * chunkSize + inFlight;
+                  console.log(`[useFileUpload] part ${partNumber} in-flight: ${loaded}B | total uploadedBytes: ${uploadedBytes}`);
+                  patchState({ uploadedBytes });
                 },
               );
               activeXhrsRef.current.add(xhr);
@@ -214,6 +216,7 @@ export const useFileUpload = () => {
               activeXhrsRef.current.delete(xhr);
               partProgressMap.delete(partNumber);
               completedParts = [...completedParts, { partNumber, etag }];
+              console.log(`[useFileUpload] part ${partNumber} complete — ${completedParts.length}/${totalParts} done`);
               patchState({
                 completedParts,
                 uploadedBytes: completedParts.length * chunkSize,
