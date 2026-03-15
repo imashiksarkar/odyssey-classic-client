@@ -10,7 +10,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@newgameplusinc/odyssey-asset-manager-sdk": "^2.0.2",
+    "@newgameplusinc/odyssey-asset-manager-sdk": "^2.0.3",
     "@newgameplusinc/odyssey-sso": "^2.0.9",
     "axios": "^1.13.6",
     "class-variance-authority": "^0.7.1",

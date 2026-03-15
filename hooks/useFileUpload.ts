@@ -14,10 +14,14 @@ import {
 const MAX_WORKERS = 10;
 const MAX_RETRIES = 6; // Higher to survive a brief wifi drop + reconnect
 
-export const useFileUpload = () => {
+export const useFileUpload = (userId: string | null) => {
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<UploadState>(INITIAL_UPLOAD_STATE);
   const controlRef = useRef({ shouldStop: false });
+
   // All XHRs that are currently in-flight. Abort all of them on pause.
   const activeXhrsRef = useRef<Set<XMLHttpRequest>>(new Set());
 
@@ -32,57 +36,91 @@ export const useFileUpload = () => {
     setState((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  /**
-   * On file select, query the backend for an active upload session matching
-   * this filename. If found, recover the exact completed parts from GCS.
-   * This replaces localStorage — works after page refresh, wifi disconnect,
-   * or even switching browsers on the same account.
-   */
+  // ─── File Select & Session Recovery ────────────────────────────────────────
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
     setFile(selected);
 
     console.log(
-      `[handleFileSelect] Looking for active session: "${selected.name}"`,
+      `[handleFileSelect] ─────────────────────────────────────────`,
     );
+    console.log(
+      `[handleFileSelect] File selected: "${selected.name}" | Size: ${(selected.size / 1024 / 1024).toFixed(2)} MB`,
+    );
+    console.log(
+      `[handleFileSelect] Chunk size will be: ${(getChunkSize(selected.size) / 1024 / 1024).toFixed(0)} MB | Est. parts: ${Math.ceil(selected.size / getChunkSize(selected.size))}`,
+    );
+    console.log(
+      `[handleFileSelect] Querying backend for active session: "${selected.name}"`,
+    );
+
     const session = await assetApi.getSession(selected.name);
-    if (session) {
+
+    if (!session) {
       console.log(
-        `[handleFileSelect] Session found — recovering parts from GCS`,
-        session,
-      );
-      // Recover actual uploaded parts from GCS — source-of-truth after any disconnect
-      const completedParts = await assetApi.listParts(
-        session.objectName,
-        session.uploadId,
-      );
-      console.log(
-        `[handleFileSelect] Recovered ${completedParts.length} completed parts — ready to resume`,
-      );
-      const chunkSize = getChunkSize(selected.size);
-      setState({
-        ...INITIAL_UPLOAD_STATE,
-        orgId: session.orgId,
-        assetId: session.assetId,
-        assetVersionId: session.assetVersionId,
-        uploadId: session.uploadId,
-        objectName: session.objectName,
-        completedParts,
-        totalBytes: selected.size,
-        uploadedBytes: completedParts.length * chunkSize,
-        status: "paused",
-        fileName: selected.name,
-        createdAt: Date.now(),
-        sessionRecovered: true,
-      });
-    } else {
-      console.log(
-        `[handleFileSelect] No active session found for "${selected.name}" — starting fresh`,
+        `[handleFileSelect] No active session found — starting fresh`,
       );
       setState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
+      return;
     }
+
+    console.log(
+      `[handleFileSelect] Session found in DB — verifying GCS state`,
+    );
+    console.log(`[handleFileSelect] Session:`, {
+      assetId: session.assetId,
+      assetVersionId: session.assetVersionId,
+      uploadId: session.uploadId,
+      objectName: session.objectName,
+    });
+
+    // Verify the GCS multipart session is actually alive by listing parts.
+    // The DB session could be stale if: upload completed but state update failed,
+    // GCS expired the uploadId, or abort was called without DB cleanup.
+    const completedParts = await assetApi.listParts(
+      session.objectName,
+      session.uploadId,
+    );
+
+    if (completedParts.length === 0) {
+      // GCS returned 0 parts — the uploadId is dead on GCS regardless of what
+      // the DB says. Could be a completed, aborted, or GCS-expired session.
+      // Do not recover — start completely fresh.
+      console.log(
+        `[handleFileSelect] Session found in DB but GCS returned 0 parts — uploadId is dead, starting fresh`,
+      );
+      setState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
+      return;
+    }
+
+    // GCS confirmed live parts — genuine in-progress session, recover it.
+    const chunkSize = getChunkSize(selected.size);
+    const uploadedBytes = completedParts.length * chunkSize;
+
+    console.log(
+      `[handleFileSelect] ✅ GCS confirmed ${completedParts.length} completed parts | ${(uploadedBytes / 1024 / 1024).toFixed(2)} MB recovered — ready to resume`,
+    );
+
+    setState({
+      ...INITIAL_UPLOAD_STATE,
+      orgId: session.orgId,
+      assetId: session.assetId,
+      assetVersionId: session.assetVersionId,
+      uploadId: session.uploadId,
+      objectName: session.objectName,
+      completedParts,
+      totalBytes: selected.size,
+      uploadedBytes,
+      status: "paused",
+      fileName: selected.name,
+      createdAt: Date.now(),
+      sessionRecovered: true,
+    });
   };
+
+  // ─── Core Upload Logic ──────────────────────────────────────────────────────
 
   const performUpload = useCallback(
     async (fileOverride?: File, stateOverride?: UploadState) => {
@@ -92,8 +130,15 @@ export const useFileUpload = () => {
 
       controlRef.current.shouldStop = false;
 
-      // Dynamic chunk size: fewer parts for large files = less overhead
       const chunkSize = getChunkSize(activeFile.size);
+      const totalParts = Math.ceil(activeFile.size / chunkSize);
+
+      console.log(
+        `[performUpload] ─────────────────────────────────────────────`,
+      );
+      console.log(
+        `[performUpload] Starting upload: "${activeFile.name}" | ${(activeFile.size / 1024 / 1024).toFixed(2)} MB | chunkSize: ${(chunkSize / 1024 / 1024).toFixed(0)} MB | totalParts: ${totalParts}`,
+      );
 
       try {
         let uploadId = activeState.uploadId;
@@ -105,9 +150,13 @@ export const useFileUpload = () => {
 
         // Initiate a new upload if no session exists in state
         if (!uploadId || !assetId || !versionId || !orgId) {
+          console.log(
+            `[performUpload] No existing session — initiating new upload`,
+          );
           const initiated = await assetApi.initiate(
             activeFile,
             formDataRef.current,
+            userIdRef.current ?? "",
           );
           uploadId = initiated.uploadId;
           objectName = initiated.objectName;
@@ -115,6 +164,9 @@ export const useFileUpload = () => {
           versionId = initiated.assetVersionId;
           orgId = initiated.orgId;
           completedParts = [];
+          console.log(
+            `[performUpload] ✅ Upload initiated | assetId: ${assetId} | versionId: ${versionId} | uploadId: ${uploadId}`,
+          );
           patchState({
             orgId,
             assetId,
@@ -126,6 +178,10 @@ export const useFileUpload = () => {
             fileName: activeFile.name,
             status: "uploading",
           });
+        } else {
+          console.log(
+            `[performUpload] Resuming existing session | assetId: ${assetId} | versionId: ${versionId} | uploadId: ${uploadId} | completedParts: ${completedParts.length}/${totalParts}`,
+          );
         }
 
         if (!uploadId || !objectName || !assetId || !versionId || !orgId) {
@@ -133,7 +189,6 @@ export const useFileUpload = () => {
         }
 
         // Build the queue of parts not yet uploaded
-        const totalParts = Math.ceil(activeFile.size / chunkSize);
         const completedPartNumbers = new Set(
           completedParts.map((p) => p.partNumber),
         );
@@ -142,16 +197,20 @@ export const useFileUpload = () => {
           if (!completedPartNumbers.has(i)) queue.push(i);
         }
 
+        console.log(
+          `[performUpload] Parts queue built | remaining: ${queue.length} | already done: ${completedParts.length} | total: ${totalParts}`,
+        );
+
         // Tracks in-flight bytes for each part currently being uploaded.
-        // Summed with completed-parts bytes to give real-time progress.
         const partProgressMap = new Map<number, number>();
 
         patchState({ status: "uploading" });
 
         // Pre-fetch signed URLs for ALL pending parts in a single request.
-        // Previously: N round-trips to backend (one per part per worker).
-        // Now: 1 request → backend generates all URLs in parallel → workers
-        //      start uploading immediately without waiting for auth round-trips.
+        console.log(
+          `[performUpload] Fetching signed URLs for ${queue.length} parts...`,
+        );
+        const urlFetchStart = Date.now();
         const signedUrlMap = await assetApi.batchGetSignedUrls(
           orgId,
           assetId,
@@ -160,17 +219,23 @@ export const useFileUpload = () => {
           objectName,
           queue,
         );
+        console.log(
+          `[performUpload] ✅ Signed URLs fetched in ${Date.now() - urlFetchStart}ms`,
+        );
 
+        // ── Part upload with retry ────────────────────────────────────────────
         const uploadPart = async (partNumber: number): Promise<void> => {
           const start = (partNumber - 1) * chunkSize;
           const end = Math.min(start + chunkSize, activeFile.size);
           const chunk = activeFile.slice(start, end);
 
+          console.log(
+            `[uploadPart] Starting part ${partNumber}/${totalParts} | ${(chunk.size / 1024 / 1024).toFixed(2)} MB | bytes ${start}–${end}`,
+          );
+
           let attempts = 0;
           while (attempts < MAX_RETRIES) {
             try {
-              // First attempt: use pre-fetched URL (no backend round-trip).
-              // Retry: fetch a fresh URL in case the pre-fetched one expired.
               const signedUrl =
                 attempts === 0
                   ? signedUrlMap[partNumber]
@@ -183,6 +248,12 @@ export const useFileUpload = () => {
                       partNumber,
                     );
 
+              if (attempts > 0) {
+                console.log(
+                  `[uploadPart] Retry ${attempts}/${MAX_RETRIES} for part ${partNumber} — fresh signed URL fetched`,
+                );
+              }
+
               const { promise, xhr } = assetApi.uploadPart(
                 signedUrl,
                 chunk,
@@ -192,17 +263,12 @@ export const useFileUpload = () => {
                     (sum, v) => sum + v,
                     0,
                   );
-                  patchState({
-                    uploadedBytes: completedParts.length * chunkSize + inFlight,
-                  });
                   const uploadedBytes =
                     completedParts.length * chunkSize + inFlight;
-                  console.log(
-                    `[useFileUpload] part ${partNumber} in-flight: ${loaded}B | total uploadedBytes: ${uploadedBytes}`,
-                  );
                   patchState({ uploadedBytes });
                 },
               );
+
               activeXhrsRef.current.add(xhr);
               let etag: string;
               try {
@@ -210,18 +276,23 @@ export const useFileUpload = () => {
               } catch (err) {
                 activeXhrsRef.current.delete(xhr);
                 partProgressMap.delete(partNumber);
-                // __ABORTED__ means pause was clicked — stop silently, part not saved.
-                // Worker exits; resume will re-queue this part.
-                if (err instanceof Error && err.message === "__ABORTED__")
+                if (err instanceof Error && err.message === "__ABORTED__") {
+                  console.log(
+                    `[uploadPart] Part ${partNumber} aborted (pause) — will re-queue on resume`,
+                  );
                   return;
+                }
                 throw err;
               }
+
               activeXhrsRef.current.delete(xhr);
               partProgressMap.delete(partNumber);
               completedParts = [...completedParts, { partNumber, etag }];
+
               console.log(
-                `[useFileUpload] part ${partNumber} complete — ${completedParts.length}/${totalParts} done`,
+                `[uploadPart] ✅ Part ${partNumber}/${totalParts} done | etag: ${etag} | progress: ${completedParts.length}/${totalParts} (${((completedParts.length / totalParts) * 100).toFixed(1)}%)`,
               );
+
               patchState({
                 completedParts,
                 uploadedBytes: completedParts.length * chunkSize,
@@ -229,12 +300,20 @@ export const useFileUpload = () => {
               return;
             } catch (err) {
               attempts++;
-              if (attempts >= MAX_RETRIES) throw err;
-              // If we're offline, wait until the browser reports online before
-              // retrying — no point hammering with retries while disconnected.
+              const errMsg =
+                err instanceof Error ? err.message : String(err);
+              console.warn(
+                `[uploadPart] ⚠️ Part ${partNumber} attempt ${attempts}/${MAX_RETRIES} failed: ${errMsg}`,
+              );
+              if (attempts >= MAX_RETRIES) {
+                console.error(
+                  `[uploadPart] ❌ Part ${partNumber} permanently failed after ${MAX_RETRIES} retries`,
+                );
+                throw err;
+              }
               if (!navigator.onLine) {
                 console.log(
-                  `[uploadPart] Offline — waiting for reconnect before retry (attempt ${attempts})`,
+                  `[uploadPart] Offline — waiting for reconnect before retry (part ${partNumber}, attempt ${attempts})`,
                 );
                 await new Promise<void>((resolve) => {
                   const onOnline = () => {
@@ -247,40 +326,65 @@ export const useFileUpload = () => {
                   `[uploadPart] Back online — retrying part ${partNumber}`,
                 );
               } else {
-                await new Promise((r) => setTimeout(r, 1000 * attempts));
+                const delay = 1000 * attempts;
+                console.log(
+                  `[uploadPart] Waiting ${delay}ms before retry (part ${partNumber}, attempt ${attempts})`,
+                );
+                await new Promise((r) => setTimeout(r, delay));
               }
             }
           }
         };
 
-        // Concurrency pool — MAX_WORKERS (10) parts upload simultaneously
+        // ── Concurrency pool ──────────────────────────────────────────────────
         const runPool = async (): Promise<void> => {
           let index = 0;
+          const workerCount = Math.min(MAX_WORKERS, queue.length);
 
-          const worker = async (): Promise<void> => {
+          console.log(
+            `[runPool] Starting ${workerCount} concurrent workers for ${queue.length} parts`,
+          );
+
+          const worker = async (workerId: number): Promise<void> => {
             while (true) {
               const i = index++;
-              if (i >= queue.length) return;
-              if (controlRef.current.shouldStop) return;
+              if (i >= queue.length) {
+                console.log(`[runPool] Worker ${workerId} finished — no more parts`);
+                return;
+              }
+              if (controlRef.current.shouldStop) {
+                console.log(`[runPool] Worker ${workerId} stopped (pause signal)`);
+                return;
+              }
               await uploadPart(queue[i]);
             }
           };
 
           const workers = Array.from(
-            { length: Math.min(MAX_WORKERS, queue.length) },
-            () => worker(),
+            { length: workerCount },
+            (_, i) => worker(i + 1),
           );
           await Promise.all(workers);
         };
 
+        const poolStart = Date.now();
         await runPool();
+        console.log(
+          `[performUpload] Pool finished in ${((Date.now() - poolStart) / 1000).toFixed(1)}s`,
+        );
 
         if (controlRef.current.shouldStop) {
+          console.log(
+            `[performUpload] Upload paused — ${completedParts.length}/${totalParts} parts completed`,
+          );
           patchState({ status: "paused" });
           return;
         }
 
         // All parts done — assemble on GCS
+        console.log(
+          `[performUpload] All ${totalParts} parts uploaded — calling complete`,
+        );
         const sortedParts = [...completedParts].sort(
           (a, b) => a.partNumber - b.partNumber,
         );
@@ -295,26 +399,29 @@ export const useFileUpload = () => {
           sortedParts,
         );
 
+        console.log(
+          `[performUpload] ✅ Upload complete | assetId: ${assetId} | versionId: ${versionId} | file: "${activeFile.name}"`,
+        );
         patchState({ uploadedBytes: activeFile.size, status: "completed" });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
+        console.error(`[performUpload] ❌ Upload failed: ${message}`);
         patchState({ status: "failed", error: message });
       }
     },
     [file, state, patchState],
   );
 
+  // ─── Form Data Ref ──────────────────────────────────────────────────────────
+
   const formDataRef = useRef<UploadFormData>({
+    orgId: "",
     assetType: "UNREAL_PROJECT",
     displayName: "",
-    unrealEngineVersion: "5.2.1",
-    target: "Development",
     selfPackaged: true,
     volumeRegions: ["ORD1", "LGA1", "LAS1"],
   });
 
-  // Keep a stable ref to performUpload so the wifi-reconnect handler
-  // (registered once with empty deps) can always call the latest version.
   const performUploadRef = useRef(performUpload);
   performUploadRef.current = performUpload;
 
@@ -328,54 +435,60 @@ export const useFileUpload = () => {
     setFormDataState(next);
   };
 
+  // ─── Handlers ──────────────────────────────────────────────────────────────
+
   const handleStart = () => {
+    console.log(`[handleStart] Starting upload for "${file?.name}"`);
     patchState({ status: "uploading", error: null });
     performUpload();
   };
 
   const handlePause = () => {
-    controlRef.current.shouldStop = true;
-    // Abort all in-flight XHRs immediately — stops progress events and frees bandwidth.
-    // Each aborted XHR resolves to __ABORTED__ error which is caught silently in uploadPart.
-    // Completed parts are already saved in completedParts; aborted parts will be re-uploaded on resume.
     console.log(
-      `[handlePause] Aborting ${activeXhrsRef.current.size} in-flight XHRs`,
+      `[handlePause] Pausing — aborting ${activeXhrsRef.current.size} in-flight XHRs`,
     );
+    controlRef.current.shouldStop = true;
     activeXhrsRef.current.forEach((xhr) => xhr.abort());
     activeXhrsRef.current.clear();
     patchState({ status: "paused" });
   };
 
   const handleResume = () => {
-    // State is held in-memory. If it was lost (page refresh), handleFileSelect
-    // already recovered it from the backend + GCS.
     if (state.uploadId && state.assetId) {
+      console.log(
+        `[handleResume] Resuming upload from ${state.completedParts?.length ?? 0} completed parts`,
+      );
       performUpload(file ?? undefined, state);
     } else {
+      console.log(`[handleResume] No session in state — resetting`);
       setState(INITIAL_UPLOAD_STATE);
     }
   };
 
   const handleRetry = () => {
+    console.log(`[handleRetry] Retrying upload for "${file?.name}"`);
     patchState({ error: null });
     performUpload();
   };
 
   const handleAbort = async () => {
-    // Kill all in-flight XHRs immediately — stops data flowing to GCS right now.
     console.log(
-      `[handleAbort] Aborting ${activeXhrsRef.current.size} in-flight XHRs`,
+      `[handleAbort] Aborting — killing ${activeXhrsRef.current.size} in-flight XHRs`,
     );
     activeXhrsRef.current.forEach((xhr) => xhr.abort());
     activeXhrsRef.current.clear();
-
     controlRef.current.shouldStop = true;
+
     const { orgId, assetId, assetVersionId, uploadId, objectName } = state;
     if (!orgId || !assetId || !assetVersionId || !uploadId || !objectName) {
+      console.log(`[handleAbort] No active session to abort — resetting state`);
       setState(INITIAL_UPLOAD_STATE);
       return;
     }
 
+    console.log(
+      `[handleAbort] Calling abort API | assetId: ${assetId} | uploadId: ${uploadId}`,
+    );
     try {
       await assetApi.abort(
         formData.assetType,
@@ -385,17 +498,21 @@ export const useFileUpload = () => {
         uploadId,
         objectName,
       );
+      console.log(`[handleAbort] ✅ Abort API call successful`);
+    } catch (err) {
+      console.error(`[handleAbort] ❌ Abort API call failed:`, err);
     } finally {
       setState(INITIAL_UPLOAD_STATE);
     }
   };
 
   const handleReset = () => {
+    console.log(`[handleReset] Resetting upload state`);
     setFile(null);
     setState(INITIAL_UPLOAD_STATE);
   };
 
-  // ── Wifi reconnect: auto-resume if upload was interrupted by network loss ──
+  // ─── Wifi Reconnect Auto-Resume ─────────────────────────────────────────────
   // TWO mechanisms to guarantee no upload stays stuck after reconnect:
   //
   // 1) window.online fires while status is already "failed" → resume immediately
@@ -411,9 +528,7 @@ export const useFileUpload = () => {
       const f = latestFileRef.current;
       if (s.status === "failed" && s.uploadId && s.assetId && f) {
         console.log(
-          `[useFileUpload] Network reconnected — auto-resuming from ${
-            s.completedParts?.length ?? 0
-          } completed parts`,
+          `[useFileUpload] 🌐 Network reconnected — auto-resuming from ${s.completedParts?.length ?? 0} completed parts`,
         );
         performUploadRef.current(f, { ...s, error: null });
       }
@@ -432,11 +547,8 @@ export const useFileUpload = () => {
       navigator.onLine
     ) {
       console.log(
-        `[useFileUpload] Status became failed while online — auto-resuming from ${
-          state.completedParts?.length ?? 0
-        } completed parts`,
+        `[useFileUpload] Status became failed while online — auto-resuming from ${state.completedParts?.length ?? 0} completed parts`,
       );
-      // Small delay to let React finish the current render cycle
       const timer = setTimeout(() => {
         performUploadRef.current(file, { ...state, error: null });
       }, 500);

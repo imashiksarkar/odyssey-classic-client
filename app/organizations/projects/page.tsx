@@ -3,11 +3,8 @@
 import { AuthContext } from "@/app/auth-wrapper";
 import { OrganizationWorkspaceNav } from "@/components/organizations/OrganizationWorkspaceNav";
 import { Button } from "@/components/ui/button";
-import { type Asset, uploadApi } from "@/lib/asset-test-api";
-import {
-  type Organization,
-  organizationApi,
-} from "@/lib/organization-api";
+import { type Asset, assetApi } from "@/lib/asset-api";
+import { type Organization, organizationApi } from "@/lib/organization-api";
 import { spaceApi } from "@/lib/space-api";
 import useAccessToken from "@/lib/use-access-token";
 import { cn } from "@/lib/utils";
@@ -112,7 +109,9 @@ export default function OrganizationProjectsPage() {
         setSelectedOrgId((current) => {
           if (
             current &&
-            nextOrganizations.some((organization) => organization.id === current)
+            nextOrganizations.some(
+              (organization) => organization.id === current,
+            )
           ) {
             return current;
           }
@@ -121,10 +120,7 @@ export default function OrganizationProjectsPage() {
         });
       } catch (error) {
         setPageError(
-          getErrorMessage(
-            error,
-            tokenError || "Failed to load organizations.",
-          ),
+          getErrorMessage(error, tokenError || "Failed to load organizations."),
         );
       } finally {
         setIsBootstrapping(false);
@@ -147,13 +143,13 @@ export default function OrganizationProjectsPage() {
       return;
     }
 
-    let isMounted = true;
+    const isMounted = true;
 
     const loadProjects = async () => {
       setPageError("");
       try {
         const [allAssets, spaces] = await Promise.all([
-          uploadApi.getAssetsByOrganization(selectedOrgId),
+          assetApi.getAllAssets(),
           spaceApi.getSpacesByOrganization(selectedOrgId, accessToken),
         ]);
 
@@ -161,7 +157,7 @@ export default function OrganizationProjectsPage() {
           return;
         }
 
-        const filteredAssets = allAssets.slice(0,10);
+        const filteredAssets = allAssets.slice(0, 10);
         const counts = spaces.reduce<Record<string, number>>((acc, space) => {
           acc[space.projectId] = (acc[space.projectId] || 0) + 1;
           return acc;
@@ -189,7 +185,8 @@ export default function OrganizationProjectsPage() {
     () =>
       [...assets].sort(
         (left, right) =>
-          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime(),
       ),
     [assets],
   );
@@ -216,7 +213,8 @@ export default function OrganizationProjectsPage() {
                 My projects
               </h1>
               <p className="mt-2 text-[13px] text-white/50 md:text-sm">
-                Browse every project in {selectedOrganization?.name || "your organization"}.
+                Browse every project in{" "}
+                {selectedOrganization?.name || "your organization"}.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -279,7 +277,9 @@ export default function OrganizationProjectsPage() {
                     <button
                       key={asset.id}
                       type="button"
-                      onClick={() => router.push(`/organizations/projects/${asset.id}`)}
+                      onClick={() =>
+                        router.push(`/organizations/projects/${asset.id}`)
+                      }
                       className="flex w-full items-center gap-5 rounded-[24px] border border-white/6 bg-white/[0.04] px-5 py-5 text-left transition hover:border-white/14 hover:bg-white/[0.06]"
                     >
                       <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-[22px] border border-white/8 bg-[#2a2c30] text-4xl font-semibold text-white/75">
@@ -300,10 +300,22 @@ export default function OrganizationProjectsPage() {
                           </span>
                           <span className="flex items-center gap-2">
                             <Clock3 className="h-4 w-4 text-white/50" />
-                            {formatRelativeAge(asset.updatedAt)}
+                            {formatRelativeAge(
+                              new Date(asset.updatedAt).toISOString(),
+                            )}
                           </span>
-                          <span className={asset.buildStatus === "COMPLETED" ? "text-emerald-300" : "text-red-300"}>
-                            [{asset.buildStatus === "COMPLETED" ? "deployed" : asset.buildStatus}]
+                          <span
+                            className={
+                              asset.buildStatus === "COMPLETED"
+                                ? "text-emerald-300"
+                                : "text-red-300"
+                            }
+                          >
+                            [
+                            {asset.buildStatus === "COMPLETED"
+                              ? "deployed"
+                              : asset.buildStatus}
+                            ]
                           </span>
                           <span className="flex items-center gap-2">
                             <PlayCircle className="h-4 w-4 text-white/50" />
