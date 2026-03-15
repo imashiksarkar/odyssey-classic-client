@@ -114,8 +114,8 @@ export const uploadApi = {
     };
 
     if (formData.assetType === "UNREAL_PROJECT") {
-      body.unrealEngineVersion = formData.unrealEngineVersion;
-      body.target = formData.target;
+      // body.unrealEngineVersion = formData.unrealEngineVersion;
+      // body.target = formData.target;
       body.selfPackaged = formData.selfPackaged;
       body.volumeRegions = ["ORD1", "LGA1", "LAS1"];
     }
