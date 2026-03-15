@@ -153,7 +153,7 @@ export default function OrganizationProjectsPage() {
       setPageError("");
       try {
         const [allAssets, spaces] = await Promise.all([
-          uploadApi.getAllAssets(),
+          uploadApi.getAssetsByOrganization(selectedOrgId),
           spaceApi.getSpacesByOrganization(selectedOrgId, accessToken),
         ]);
 
@@ -324,3 +324,4 @@ export default function OrganizationProjectsPage() {
     </div>
   );
 }
+

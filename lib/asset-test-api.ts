@@ -80,6 +80,11 @@ export const uploadApi = {
     return res.data.data;
   },
 
+  getAssetsByOrganization: async (orgId: string): Promise<Asset[]> => {
+    const res = await axios.get(`${API_BASE}/assets/organization/${orgId}`);
+    return res.data.data;
+  },
+
   getAsset: async (assetId: string): Promise<Asset> => {
     const res = await axios.get(`${API_BASE}/assets/${assetId}`);
     return res.data.data;
