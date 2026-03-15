@@ -4,10 +4,20 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useFileUpload } from "@/hooks/useFileUpload";
-import { PackageTypeSelector } from "@/components/AssetManager/PackageTypeSelector.tsx";
+import { useCredentials } from "@/hooks/useCredentials";
+import { useOrganizations } from "@/hooks/useOrganizations";
+import { PackageTypeSelector } from "@/components/AssetManager/PackageTypeSelector";
+import { OrganizationSelector } from "@/components/AssetManager/OrganizationSelector";
 
 export default function UploadPage() {
   const router = useRouter();
+
+  const { credentials, loading: credentialsLoading } = useCredentials();
+  const {
+    organizations,
+    loading: orgsLoading,
+    error: orgsError,
+  } = useOrganizations(credentials ?? null);
 
   const {
     file,
@@ -21,7 +31,7 @@ export default function UploadPage() {
     handleResume,
     handleRetry,
     handleAbort,
-  } = useFileUpload();
+  } = useFileUpload(credentials?.userId ?? null);
 
   // On upload complete → navigate to asset detail
   useEffect(() => {
@@ -35,6 +45,13 @@ export default function UploadPage() {
 
   const isUploading = state.status === "uploading";
   const showStatus = state.status !== "idle" && state.totalBytes > 0;
+
+  // Block start until org is manually selected and credentials are ready
+  const canStart =
+    !!file &&
+    !!formData.orgId &&
+    !!credentials?.userId &&
+    state.status === "idle";
 
   const progressBarColor =
     state.status === "failed"
@@ -89,6 +106,22 @@ export default function UploadPage() {
             Configuration
           </h2>
 
+          {/* Organization */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Organization
+            </label>
+            <OrganizationSelector
+              organizations={organizations}
+              value={formData.orgId ?? ""}
+              onChange={(orgId) => setFormData({ orgId })}
+              disabled={isUploading || credentialsLoading}
+              loading={orgsLoading}
+              error={orgsError}
+            />
+          </div>
+
+          {/* Asset Type */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Asset Type
@@ -108,6 +141,7 @@ export default function UploadPage() {
             </select>
           </div>
 
+          {/* Display Name */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Display Name{" "}
@@ -125,52 +159,18 @@ export default function UploadPage() {
             />
           </div>
 
+          {/* Unreal-specific fields */}
           {formData.assetType === "UNREAL_PROJECT" && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Engine Version
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.unrealEngineVersion}
-                    onChange={(e) =>
-                      setFormData({ unrealEngineVersion: e.target.value })
-                    }
-                    disabled={isUploading}
-                    placeholder="e.g. 5.2.1"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-800 placeholder:text-gray-300 disabled:opacity-50 focus:outline-none focus:border-gray-400"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Target
-                  </label>
-                  <select
-                    value={formData.target}
-                    onChange={(e) => setFormData({ target: e.target.value })}
-                    disabled={isUploading}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-800 disabled:opacity-50 focus:outline-none focus:border-gray-400"
-                  >
-                    <option value="Development">Development</option>
-                    <option value="Shipping">Shipping</option>
-                    <option value="Test">Test</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Package Type
-                </label>
-                <PackageTypeSelector
-                  value={formData.selfPackaged}
-                  onChange={(v) => setFormData({ selfPackaged: v })}
-                  disabled={isUploading}
-                />
-              </div>
-            </>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Package Type
+              </label>
+              <PackageTypeSelector
+                value={formData.selfPackaged}
+                onChange={(v) => setFormData({ selfPackaged: v })}
+                disabled={isUploading}
+              />
+            </div>
           )}
         </section>
 
@@ -235,7 +235,7 @@ export default function UploadPage() {
 
         {/* Actions */}
         <div className="flex gap-2 flex-wrap">
-          {state.status === "idle" && file && (
+          {canStart && (
             <Button
               onClick={handleStart}
               className="bg-gray-900 text-white hover:bg-gray-700 text-sm font-semibold px-5"
