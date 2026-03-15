@@ -14,7 +14,9 @@ import {
 const MAX_WORKERS = 10;
 const MAX_RETRIES = 6; // Higher to survive a brief wifi drop + reconnect
 
-export const useFileUpload = () => {
+export const useFileUpload = (userId: string | null) => {
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<UploadState>(INITIAL_UPLOAD_STATE);
   const controlRef = useRef({ shouldStop: false });
@@ -44,46 +46,72 @@ export const useFileUpload = () => {
     setFile(selected);
 
     console.log(
+      `[handleFileSelect] File selected: "${selected.name}" (${(selected.size / 1024 / 1024).toFixed(2)} MB)`,
+    );
+    console.log(
       `[handleFileSelect] Looking for active session: "${selected.name}"`,
     );
+
     const session = await assetApi.getSession(selected.name);
-    if (session) {
-      console.log(
-        `[handleFileSelect] Session found — recovering parts from GCS`,
-        session,
-      );
-      // Recover actual uploaded parts from GCS — source-of-truth after any disconnect
-      const completedParts = await assetApi.listParts(
-        session.objectName,
-        session.uploadId,
-      );
-      console.log(
-        `[handleFileSelect] Recovered ${completedParts.length} completed parts — ready to resume`,
-      );
-      const chunkSize = getChunkSize(selected.size);
-      setState({
-        ...INITIAL_UPLOAD_STATE,
-        orgId: session.orgId,
-        assetId: session.assetId,
-        assetVersionId: session.assetVersionId,
-        uploadId: session.uploadId,
-        objectName: session.objectName,
-        completedParts,
-        totalBytes: selected.size,
-        uploadedBytes: completedParts.length * chunkSize,
-        status: "paused",
-        fileName: selected.name,
-        createdAt: Date.now(),
-        sessionRecovered: true,
-      });
-    } else {
+
+    if (!session) {
       console.log(
         `[handleFileSelect] No active session found for "${selected.name}" — starting fresh`,
       );
       setState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
+      return;
     }
-  };
 
+    console.log(
+      `[handleFileSelect] Session found in DB — verifying GCS state`,
+      session,
+    );
+
+    // Verify the GCS multipart session is actually alive by listing parts.
+    // The DB session could be stale if: upload completed but state update failed,
+    // GCS expired the uploadId, or abort was called without DB cleanup.
+    const completedParts = await assetApi.listParts(
+      session.objectName,
+      session.uploadId,
+    );
+
+    if (completedParts.length === 0) {
+      // GCS returned 0 parts — the uploadId is dead on GCS regardless of what
+      // the DB says. Could be a completed, aborted, or GCS-expired session.
+      // Do not recover — start completely fresh.
+      console.log(
+        `[handleFileSelect] Session found in DB but GCS returned 0 parts — uploadId is dead, starting fresh`,
+      );
+      setState({ ...INITIAL_UPLOAD_STATE, totalBytes: selected.size });
+      return;
+    }
+
+    // GCS confirmed live parts — this is a genuine in-progress session.
+    // Recover it so the user can resume from where they left off.
+    const chunkSize = getChunkSize(selected.size);
+    const uploadedBytes = completedParts.length * chunkSize;
+
+    console.log(
+      `[handleFileSelect] GCS confirmed ${completedParts.length} completed parts ` +
+        `(${(uploadedBytes / 1024 / 1024).toFixed(2)} MB) — recovering session for resume`,
+    );
+
+    setState({
+      ...INITIAL_UPLOAD_STATE,
+      orgId: session.orgId,
+      assetId: session.assetId,
+      assetVersionId: session.assetVersionId,
+      uploadId: session.uploadId,
+      objectName: session.objectName,
+      completedParts,
+      totalBytes: selected.size,
+      uploadedBytes,
+      status: "paused",
+      fileName: selected.name,
+      createdAt: Date.now(),
+      sessionRecovered: true,
+    });
+  };
   const performUpload = useCallback(
     async (fileOverride?: File, stateOverride?: UploadState) => {
       const activeFile = fileOverride ?? file;
@@ -108,6 +136,7 @@ export const useFileUpload = () => {
           const initiated = await assetApi.initiate(
             activeFile,
             formDataRef.current,
+            userIdRef.current ?? "",
           );
           uploadId = initiated.uploadId;
           objectName = initiated.objectName;
@@ -305,10 +334,9 @@ export const useFileUpload = () => {
   );
 
   const formDataRef = useRef<UploadFormData>({
+    orgId: "",
     assetType: "UNREAL_PROJECT",
     displayName: "",
-    unrealEngineVersion: "5.2.1",
-    target: "Development",
     selfPackaged: true,
     volumeRegions: ["ORD1", "LGA1", "LAS1"],
   });

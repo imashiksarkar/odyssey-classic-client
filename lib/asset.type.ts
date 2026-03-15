@@ -5,10 +5,10 @@ export const getChunkSize = (fileSizeBytes: number): number => {
   const MB = 1024 * 1024;
   const GB = 1024 * MB;
 
-  if (fileSizeBytes < 1 * GB)   return 5 * MB;    // < 1 GB   →   5 MB chunks (~200 parts max)
-  if (fileSizeBytes < 5 * GB)   return 25 * MB;   // < 5 GB   →  25 MB chunks (~205 parts max)
-  if (fileSizeBytes < 20 * GB)  return 100 * MB;  // < 20 GB  → 100 MB chunks (~205 parts max)
-  return 256 * MB;                                  // ≥ 20 GB  → 256 MB chunks (~200 parts for 50 GB)
+  if (fileSizeBytes < 1 * GB) return 5 * MB; // < 1 GB   →   5 MB chunks (~200 parts max)
+  if (fileSizeBytes < 5 * GB) return 25 * MB; // < 5 GB   →  25 MB chunks (~205 parts max)
+  if (fileSizeBytes < 20 * GB) return 100 * MB; // < 20 GB  → 100 MB chunks (~205 parts max)
+  return 256 * MB; // ≥ 20 GB  → 256 MB chunks (~200 parts for 50 GB)
 };
 
 // Legacy constant kept for any code that hasn't migrated to getChunkSize yet.
@@ -48,10 +48,9 @@ export interface UploadState {
 }
 
 export interface UploadFormData {
+  orgId: string;
   assetType: "UNREAL_PROJECT" | "OTHER_3D";
   displayName: string;
-  unrealEngineVersion: string;
-  target: string;
   volumeRegions: ("ORD1" | "LGA1" | "LAS1")[];
   selfPackaged: boolean;
 }

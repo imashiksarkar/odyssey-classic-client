@@ -51,9 +51,6 @@ export interface UnrealProjectVersion {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const generateCuid = () =>
-  "c" + Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
-
 /** SDK returns Date objects; pages expect ISO strings. Normalise here. */
 function normaliseVersion(v: SDKUnrealProjectVersion): UnrealProjectVersion {
   return {
@@ -88,26 +85,31 @@ export const assetApi = {
 
   // ── Upload flow ──────────────────────────────────────────────────────────
 
+  /**
+   * Initiates a multipart upload session.
+   * Requires orgId and userId from credentials — both must be set in formData
+   * before this is called.
+   */
   initiate: async (
     file: File,
     formData: UploadFormData,
+    userId: string,
   ): Promise<InitResponse> => {
-    const orgId = generateCuid();
+    if (!formData.orgId)
+      throw new Error("orgId is required to initiate upload");
+
     const res = await assetManager.initiateUpload({
-      orgId,
+      orgId: formData.orgId,
+      userId: userId,
       assetType: formData.assetType,
       assetFilename: file.name,
       unrealProjectDisplayName: formData.displayName || file.name,
       ...(formData.assetType === "UNREAL_PROJECT" && {
-        unrealEngineVersion: formData.unrealEngineVersion as
-          | "5.0.3"
-          | "5.2.1"
-          | undefined,
-        target: formData.target as "Development" | "Shipping" | undefined,
         selfPackaged: formData.selfPackaged,
         volumeRegions: ["ORD1", "LGA1", "LAS1"],
       }),
     });
+
     return {
       uploadId: res.uploadId,
       objectName: res.objectName,
