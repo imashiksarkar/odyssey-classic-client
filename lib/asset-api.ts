@@ -282,4 +282,7 @@ export const assetApi = {
         v.updatedAt instanceof Date ? v.updatedAt.toISOString() : v.updatedAt,
     };
   },
+
+  validateSdkKey: (): Promise<{ valid: boolean }> =>
+    assetManager.validateSdkKey(),
 };
