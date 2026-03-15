@@ -43,9 +43,7 @@ export const useFileUpload = (userId: string | null) => {
     if (!selected) return;
     setFile(selected);
 
-    console.log(
-      `[handleFileSelect] ─────────────────────────────────────────`,
-    );
+    console.log(`[handleFileSelect] ─────────────────────────────────────────`);
     console.log(
       `[handleFileSelect] File selected: "${selected.name}" | Size: ${(selected.size / 1024 / 1024).toFixed(2)} MB`,
     );
@@ -66,9 +64,7 @@ export const useFileUpload = (userId: string | null) => {
       return;
     }
 
-    console.log(
-      `[handleFileSelect] Session found in DB — verifying GCS state`,
-    );
+    console.log(`[handleFileSelect] Session found in DB — verifying GCS state`);
     console.log(`[handleFileSelect] Session:`, {
       assetId: session.assetId,
       assetVersionId: session.assetVersionId,
@@ -207,22 +203,29 @@ export const useFileUpload = (userId: string | null) => {
         patchState({ status: "uploading" });
 
         // Pre-fetch signed URLs for ALL pending parts in a single request.
-        console.log(
-          `[performUpload] Fetching signed URLs for ${queue.length} parts...`,
-        );
-        const urlFetchStart = Date.now();
-        const signedUrlMap = await assetApi.batchGetSignedUrls(
-          orgId,
-          assetId,
-          versionId,
-          uploadId,
-          objectName,
-          queue,
-        );
-        console.log(
-          `[performUpload] ✅ Signed URLs fetched in ${Date.now() - urlFetchStart}ms`,
-        );
+        let signedUrlMap: Record<number, string> = {};
 
+        if (queue.length > 0) {
+          console.log(
+            `[performUpload] Fetching signed URLs for ${queue.length} parts...`,
+          );
+          const urlFetchStart = Date.now();
+          signedUrlMap = await assetApi.batchGetSignedUrls(
+            orgId,
+            assetId,
+            versionId,
+            uploadId,
+            objectName,
+            queue,
+          );
+          console.log(
+            `[performUpload] ✅ Signed URLs fetched in ${Date.now() - urlFetchStart}ms`,
+          );
+        } else {
+          console.log(
+            `[performUpload] All parts already uploaded — skipping signed URL fetch, proceeding to complete`,
+          );
+        }
         // ── Part upload with retry ────────────────────────────────────────────
         const uploadPart = async (partNumber: number): Promise<void> => {
           const start = (partNumber - 1) * chunkSize;
@@ -300,8 +303,7 @@ export const useFileUpload = (userId: string | null) => {
               return;
             } catch (err) {
               attempts++;
-              const errMsg =
-                err instanceof Error ? err.message : String(err);
+              const errMsg = err instanceof Error ? err.message : String(err);
               console.warn(
                 `[uploadPart] ⚠️ Part ${partNumber} attempt ${attempts}/${MAX_RETRIES} failed: ${errMsg}`,
               );
@@ -349,20 +351,23 @@ export const useFileUpload = (userId: string | null) => {
             while (true) {
               const i = index++;
               if (i >= queue.length) {
-                console.log(`[runPool] Worker ${workerId} finished — no more parts`);
+                console.log(
+                  `[runPool] Worker ${workerId} finished — no more parts`,
+                );
                 return;
               }
               if (controlRef.current.shouldStop) {
-                console.log(`[runPool] Worker ${workerId} stopped (pause signal)`);
+                console.log(
+                  `[runPool] Worker ${workerId} stopped (pause signal)`,
+                );
                 return;
               }
               await uploadPart(queue[i]);
             }
           };
 
-          const workers = Array.from(
-            { length: workerCount },
-            (_, i) => worker(i + 1),
+          const workers = Array.from({ length: workerCount }, (_, i) =>
+            worker(i + 1),
           );
           await Promise.all(workers);
         };
@@ -546,8 +551,18 @@ export const useFileUpload = (userId: string | null) => {
       file &&
       navigator.onLine
     ) {
+      const totalParts = Math.ceil(file.size / getChunkSize(file.size));
+      const remaining = totalParts - (state.completedParts?.length ?? 0);
+
+      if (remaining <= 0) {
+        console.log(
+          `[useFileUpload] Status failed but all ${totalParts} parts already uploaded — not auto-resuming (complete call failed, use Retry)`,
+        );
+        return;
+      }
+
       console.log(
-        `[useFileUpload] Status became failed while online — auto-resuming from ${state.completedParts?.length ?? 0} completed parts`,
+        `[useFileUpload] Status became failed while online — auto-resuming from ${state.completedParts?.length ?? 0} completed parts (${remaining} remaining)`,
       );
       const timer = setTimeout(() => {
         performUploadRef.current(file, { ...state, error: null });
