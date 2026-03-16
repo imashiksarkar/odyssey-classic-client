@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import assetManager from "@/config/assetManager";
+import getAssetManager from "@/config/assetManager";
 import {
   getStateLabel,
   mapStateToStatus,
@@ -81,13 +81,13 @@ function HealthSection() {
     setHealthErr(false);
     setRedisErr(false);
     try {
-      const h = await assetManager.getHealth();
+      const h = await getAssetManager()!.getHealth();
       setHealth(h as unknown as HealthData);
     } catch {
       setHealthErr(true);
     }
     try {
-      const r = await assetManager.getRedisHealth();
+      const r = await getAssetManager()!.getRedisHealth();
       setRedis(r as unknown as RedisHealthData);
     } catch {
       setRedisErr(true);
@@ -224,7 +224,7 @@ function VersionTracer() {
 
   const poll = async (id: string) => {
     try {
-      const v = await assetManager.getProjectVersion(id);
+      const v = await getAssetManager()!.getProjectVersion(id);
       setCurrent(v.state);
       setError(null);
       // Only record a snapshot when state actually changes
