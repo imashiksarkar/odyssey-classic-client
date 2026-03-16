@@ -12,7 +12,7 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 const Home = () => {
   const [focus, setFocus] = useState(0);
 
-  const { user, loading, login, logout, isLoggedIn, ssoSdkKey, e } = useAuth();
+  const { user, loading, login, logout, isLoggedIn, ssoSdkKey } = useAuth();
 
   const sdk = useMemo(() => getSdk(ssoSdkKey), [ssoSdkKey]);
 
@@ -37,7 +37,7 @@ const Home = () => {
 
   useEffect(() => {
     sdk?.fetchProfile();
-  }, [focus, sdk, e]);
+  }, [focus, sdk]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

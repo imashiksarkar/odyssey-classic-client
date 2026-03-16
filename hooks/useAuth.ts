@@ -14,7 +14,7 @@ const useAuth = () => {
     setInLoggedIn,
     isLoggedIn,
     ssoSdkKey,
-    e
+    assetSdkKey,
   } = use(AuthContext);
   const sdk = useMemo(() => getSdk(), []);
 
@@ -47,7 +47,7 @@ const useAuth = () => {
     user,
     isLoggedIn,
     ssoSdkKey,
-    e
+    assetSdkKey,
   };
 };
 

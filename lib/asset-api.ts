@@ -3,7 +3,7 @@ import type {
   ProjectVersionInfo,
   UploadFormData,
 } from "./asset.type";
-import assetManager from "@/config/assetManager";
+import getAssetManager from "@/config/assetManager";
 import type {
   AssetWithRelations,
   UnrealProjectVersion as SDKUnrealProjectVersion,
@@ -71,15 +71,15 @@ export const assetApi = {
   // ── Asset list & detail ──────────────────────────────────────────────────
 
   getAllAssets: (): Promise<AssetWithRelations[]> =>
-    assetManager.getAllAssets(),
+    getAssetManager()!.getAllAssets(),
 
   getAsset: (assetId: string): Promise<AssetWithRelations> =>
-    assetManager.getAsset(assetId),
+    getAssetManager()!.getAsset(assetId),
 
   getVersionsByAsset: async (
     assetId: string,
   ): Promise<UnrealProjectVersion[]> => {
-    const versions = await assetManager.getVersionsByAsset(assetId);
+    const versions = await getAssetManager()!.getVersionsByAsset(assetId);
     return versions.map(normaliseVersion);
   },
 
@@ -98,7 +98,7 @@ export const assetApi = {
     if (!formData.orgId)
       throw new Error("orgId is required to initiate upload");
 
-    const res = await assetManager.initiateUpload({
+    const res = await getAssetManager()!.initiateUpload({
       orgId: formData.orgId,
       userId: userId,
       assetType: formData.assetType,
@@ -127,7 +127,7 @@ export const assetApi = {
     objectName: string,
     partNumber: number,
   ): Promise<string> =>
-    assetManager.getSignedUrl(
+    getAssetManager()!.getSignedUrl(
       orgId,
       assetId,
       assetVersionId,
@@ -144,7 +144,7 @@ export const assetApi = {
     objectName: string,
     partNumbers: number[],
   ): Promise<Record<number, string>> =>
-    assetManager.batchGetSignedUrls(
+    getAssetManager()!.batchGetSignedUrls(
       orgId,
       assetId,
       assetVersionId,
@@ -218,7 +218,7 @@ export const assetApi = {
     objectName: string,
     parts: { partNumber: number; etag: string }[],
   ): Promise<void> => {
-    await assetManager.completeUpload({
+    await getAssetManager()!.completeUpload({
       assetType: assetType as "UNREAL_PROJECT" | "OTHER_3D",
       orgId,
       assetId,
@@ -237,7 +237,7 @@ export const assetApi = {
     uploadId: string,
     objectName: string,
   ): Promise<void> => {
-    await assetManager.abortUpload({
+    await getAssetManager()!.abortUpload({
       assetType: assetType as "UNREAL_PROJECT" | "OTHER_3D",
       orgId,
       assetId,
@@ -255,18 +255,18 @@ export const assetApi = {
     assetVersionId: string;
     uploadId: string;
     objectName: string;
-  } | null> => assetManager.getUploadSession(filename),
+  } | null> => getAssetManager()!.getUploadSession(filename),
 
   listParts: (
     objectName: string,
     uploadId: string,
   ): Promise<{ partNumber: number; etag: string }[]> =>
-    assetManager.listUploadedParts(objectName, uploadId),
+    getAssetManager()!.listUploadedParts(objectName, uploadId),
 
   getProjectVersion: async (
     assetVersionId: string,
   ): Promise<ProjectVersionInfo> => {
-    const v = await assetManager.getProjectVersion(assetVersionId);
+    const v = await getAssetManager()!.getProjectVersion(assetVersionId);
     return {
       id: v.id,
       state: v.state,
@@ -284,5 +284,5 @@ export const assetApi = {
   },
 
   validateSdkKey: (): Promise<{ valid: boolean }> =>
-    assetManager.validateSdkKey(),
+    getAssetManager()!.validateSdkKey(),
 };

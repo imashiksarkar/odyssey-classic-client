@@ -1,5 +1,6 @@
 "use client";
 
+import getAssetManager from "@/config/assetManager";
 import db from "@/config/db.config";
 import getSdk from "@/config/sso";
 import { exchange } from "@/lib/sso.local";
@@ -24,7 +25,7 @@ interface IAuthContext {
   isLoggedIn: boolean;
   setInLoggedIn: Dispatch<SetStateAction<boolean>>;
   ssoSdkKey: string | null;
-  e: number;
+  assetSdkKey: string | null;
 }
 
 export const AuthContext = createContext({} as IAuthContext);
@@ -45,6 +46,7 @@ const AuthWrapper = ({
   }, []);
 
   const [ssoSdkKey, setSsoSdkKey] = useState<string | null>(null);
+  const [assetSdkKey, setAssetSdkKey] = useState<string | null>(null);
   const [isLoggedIn, setInLoggedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<null | Profile>(null);
@@ -83,10 +85,20 @@ const AuthWrapper = ({
           const active = d.data.filter((sdk) => sdk.isActive);
 
           const ssoSdk = active.find((sdk) => sdk.serviceType === "AVATAR_SSO");
+          const assetSdk = active.find(
+            (sdk) => sdk.serviceType === "ASSETS_MANAGER",
+          );
 
           if (!ssoSdk) return;
 
           setSsoSdkKey(ssoSdk.sdkKey);
+
+          if (assetSdk) {
+            console.log("[AuthWrapper] Asset SDK found:", assetSdk);
+            console.log("[AuthWrapper] Asset SDK key set:", assetSdk.sdkKey);
+            getAssetManager(assetSdk.sdkKey); 
+            setAssetSdkKey(assetSdk.sdkKey);
+          }
         } catch (e) {
           console.log("error fetching sdk keys", e);
         }
@@ -106,7 +118,7 @@ const AuthWrapper = ({
         isLoggedIn,
         setInLoggedIn,
         ssoSdkKey,
-        e,
+        assetSdkKey,
       }}
     >
       {children}
