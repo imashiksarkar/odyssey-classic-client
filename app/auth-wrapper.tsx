@@ -24,6 +24,7 @@ interface IAuthContext {
   isLoggedIn: boolean;
   setInLoggedIn: Dispatch<SetStateAction<boolean>>;
   ssoSdkKey: string | null;
+  e: number;
 }
 
 export const AuthContext = createContext({} as IAuthContext);
@@ -55,10 +56,11 @@ const AuthWrapper = ({
       if (action.type === "profile.fetch") setUser(action.payload);
     });
 
-    exchange().then(async () => {
+    exchange().then(async (e) => {
       setLoading(true);
-      const r = await sdk?.fetchProfile();
-      setInLoggedIn(!!r);
+      await sdk?.fetchProfile();
+
+      setInLoggedIn(!!e);
       setLoading(false);
       setE(Date.now());
     });
@@ -104,6 +106,7 @@ const AuthWrapper = ({
         isLoggedIn,
         setInLoggedIn,
         ssoSdkKey,
+        e,
       }}
     >
       {children}
