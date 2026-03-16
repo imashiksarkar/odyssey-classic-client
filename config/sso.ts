@@ -1,8 +1,20 @@
 import SSO from "@newgameplusinc/odyssey-sso";
 
-const sso = new SSO({
-  sdkKey: process.env.NEXT_PUBLIC_SDK_KEY ?? "testing",
-  debug: process.env.NEXT_PUBLIC_ENV !== "production",
-});
+let sso: SSO | null = null;
 
-export default sso;
+const getSdk = () => {
+  if (sso) return sso;
+
+  const sdkKey: string | undefined = process.env.NEXT_PUBLIC_SDK_KEY;
+
+  if (!sdkKey) return null;
+
+  sso = new SSO({
+    sdkKey: sdkKey,
+    debug: process.env.NEXT_PUBLIC_ENV !== "production",
+  });
+
+  return sso;
+};
+
+export default getSdk;

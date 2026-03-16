@@ -1,23 +1,32 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import sso from "@/config/sso";
-import { CheckCircle2, LogOut } from "lucide-react";
-import { ChangeEvent, use, useCallback, useEffect, useState } from "react";
-import { AuthContext } from "./auth-wrapper";
-import Link from "next/link";
-import Image from "next/image";
 import { Input } from "@/components/ui/input";
+import getSdk from "@/config/sso";
+import useAuth from "@/hooks/useAuth";
+import { CheckCircle2, LogOut } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 const Home = () => {
   const [focus, setFocus] = useState(0);
 
-  const { user } = use(AuthContext);
+  const { user, loading, login, logout, isLoggedIn } = useAuth();
 
-  const onChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) sso.avatarUpdate(file);
-  }, []);
+  const sdk = useMemo(() => getSdk(), []);
+
+  const onChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file)
+        sdk?.avatarUpdate(file).then((r) => {
+          if (!r) return;
+          sdk?.fetchProfile();
+        });
+    },
+    [sdk],
+  );
 
   useEffect(() => {
     const focusHandler = () => setFocus(Math.random());
@@ -27,8 +36,8 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
-    sso.fetchProfile();
-  }, [focus]);
+    sdk?.fetchProfile();
+  }, [focus, sdk]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -62,19 +71,19 @@ const Home = () => {
             </Link>
           </div>
 
-          {user ? (
+          {isLoggedIn ? (
             <Button
               variant="destructive"
               size="sm"
               className="gap-2 cursor-pointer"
-              onClick={sso.logout}
+              onClick={logout}
             >
               <LogOut className="w-4 h-4" />
               Logout
             </Button>
           ) : (
             <Button
-              onClick={() => sso.login(window.location.origin)}
+              onClick={() => login(window.location.origin)}
               size="sm"
               className="cursor-pointer"
             >
@@ -86,7 +95,17 @@ const Home = () => {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16">
-        {user ? (
+        {!isLoggedIn ? (
+          <div className="flex items-center justify-center min-h-125">
+            <p className="text-muted-foreground">
+              Login to see your profile and account details
+            </p>
+          </div>
+        ) : // loggedin
+
+        !sdk ? (
+          <div>You need to purchase sso sdk.</div>
+        ) : user ? (
           <div className="space-y-12">
             {/* Profile Section */}
             <div className="flex flex-col lg:flex-row gap-12 items-start">
@@ -99,6 +118,7 @@ const Home = () => {
                       alt="avatar"
                       width={300}
                       height={300}
+                      loading="eager"
                       className="w-full h-full object-cover absolute z-10 pointer-events-none"
                     />
                     <Input
@@ -157,13 +177,7 @@ const Home = () => {
               </div>
             </div>
           </div>
-        ) : user === null ? (
-          <div className="flex items-center justify-center min-h-125">
-            <p className="text-muted-foreground">
-              Login to see your profile and account details
-            </p>
-          </div>
-        ) : (
+        ) : !loading ? null : (
           <div className="flex items-center justify-center min-h-125">
             <p className="text-muted-foreground">Loading...</p>
           </div>
