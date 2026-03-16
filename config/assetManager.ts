@@ -1,9 +1,19 @@
 import { AssetManagerSDK } from "@newgameplusinc/odyssey-asset-manager-sdk";
 
-const assetManager = new AssetManagerSDK({
-  baseUrl: process.env.NEXT_PUBLIC_API_BASE!,
-  timeout: 30000,
-  sdkKey: process.env.NEXT_PUBLIC_ASSET_SDK_KEY,
-});
+let assetManager: AssetManagerSDK | null = null;
 
-export default assetManager;
+const getAssetManager = (sdkKey?: string | null) => {
+  if (assetManager) return assetManager;
+
+  if (!sdkKey) return null;
+
+  assetManager = new AssetManagerSDK({
+    baseUrl: process.env.NEXT_PUBLIC_API_BASE!,
+    timeout: 30000,
+    sdkKey,
+  });
+
+  return assetManager;
+};
+
+export default getAssetManager;
