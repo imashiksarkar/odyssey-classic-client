@@ -3,7 +3,6 @@
 
 import { AuthContext } from "@/app/auth-wrapper";
 import { Button } from "@/components/ui/button";
-import sso from "@/config/sso";
 import {
   Organization,
   OrganizationInvite,
@@ -876,7 +875,7 @@ console.log("selectedOrgId",organizations, selectedOrganization)
               </div>
               <div className="flex items-center gap-3">
                 <button type="button" className="rounded-full p-2 transition hover:bg-white/8 hover:text-white"><Bell className="h-5 w-5" /></button>
-                <button type="button" onClick={sso.logout} className="rounded-full p-2 transition hover:bg-white/8 hover:text-white"><LogOut className="h-5 w-5" /></button>
+                <button type="button"className="rounded-full p-2 transition hover:bg-white/8 hover:text-white"><LogOut className="h-5 w-5" /></button>
               </div>
             </div>
           </div>

@@ -2,7 +2,6 @@
 
 import { AuthContext } from "@/app/auth-wrapper";
 import { Button } from "@/components/ui/button";
-import sso from "@/config/sso";
 import { type SpaceInvite, spaceApi } from "@/lib/space-api";
 import useAccessToken from "@/lib/use-access-token";
 import { cn } from "@/lib/utils";
@@ -30,9 +29,6 @@ export default function SpaceInvitePage() {
   const [pageError, setPageError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  useEffect(() => {
-    sso.fetchProfile();
-  }, []);
 
   useEffect(() => {
     const loadInvite = async () => {
@@ -136,7 +132,7 @@ export default function SpaceInvitePage() {
               <p className="truncate text-xs text-white/50">{user?.email || "Not signed in"}</p>
             </div>
             {user ? (
-              <button type="button" onClick={sso.logout} className="rounded-full p-2 text-white/70 transition hover:bg-white/8 hover:text-white">
+              <button type="button" className="rounded-full p-2 text-white/70 transition hover:bg-white/8 hover:text-white">
                 <LogOut className="h-4 w-4" />
               </button>
             ) : null}
