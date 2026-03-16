@@ -23,7 +23,7 @@ interface IAuthContext {
   loading: boolean;
   setLoading: (loading: boolean) => void;
   isLoggedIn: boolean;
-  setInLoggedIn: Dispatch<SetStateAction<boolean>>;
+  setLoggedIn: Dispatch<SetStateAction<boolean>>;
   ssoSdkKey: string | null;
   assetSdkKey: string | null;
 }
@@ -47,7 +47,7 @@ const AuthWrapper = ({
 
   const [ssoSdkKey, setSsoSdkKey] = useState<string | null>(null);
   const [assetSdkKey, setAssetSdkKey] = useState<string | null>(null);
-  const [isLoggedIn, setInLoggedIn] = useState(false);
+  const [isLoggedIn, setLoggedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<null | Profile>(null);
   const [e, setE] = useState(() => Date.now());
@@ -59,10 +59,11 @@ const AuthWrapper = ({
     });
 
     exchange().then(async (e) => {
+      if (!e) return;
       setLoading(true);
       await sdk?.fetchProfile();
 
-      setInLoggedIn(!!e);
+      setLoggedIn(true);
       setLoading(false);
       setE(Date.now());
     });
@@ -89,14 +90,12 @@ const AuthWrapper = ({
             (sdk) => sdk.serviceType === "ASSETS_MANAGER",
           );
 
-          if (!ssoSdk) return;
-
-          setSsoSdkKey(ssoSdk.sdkKey);
+          if (ssoSdk) setSsoSdkKey(ssoSdk.sdkKey);
 
           if (assetSdk) {
             console.log("[AuthWrapper] Asset SDK found:", assetSdk);
             console.log("[AuthWrapper] Asset SDK key set:", assetSdk.sdkKey);
-            getAssetManager(assetSdk.sdkKey); 
+            getAssetManager(assetSdk.sdkKey);
             setAssetSdkKey(assetSdk.sdkKey);
           }
         } catch (e) {
@@ -116,7 +115,7 @@ const AuthWrapper = ({
         loading,
         setLoading,
         isLoggedIn,
-        setInLoggedIn,
+        setLoggedIn,
         ssoSdkKey,
         assetSdkKey,
       }}
