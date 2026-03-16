@@ -12,9 +12,9 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 const Home = () => {
   const [focus, setFocus] = useState(0);
 
-  const { user, loading, login, logout, isLoggedIn } = useAuth();
+  const { user, loading, login, logout, isLoggedIn, ssoSdkKey } = useAuth();
 
-  const sdk = useMemo(() => getSdk(), []);
+  const sdk = useMemo(() => getSdk(ssoSdkKey), [ssoSdkKey]);
 
   const onChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {

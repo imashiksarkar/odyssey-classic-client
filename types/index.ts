@@ -78,3 +78,21 @@ export interface RefTokenRes {
     refreshToken: string;
   };
 }
+
+export interface SdkKeysRes {
+  statusCode: number;
+  success: boolean;
+  message: string;
+  data: {
+    id: string;
+    subscriptionId: string;
+    sdkKey: string;
+    userId: string;
+    serviceType: string;
+    isActive: boolean;
+    activateAt: Date;
+    expiresAt: null;
+    createdAt: Date;
+    updatedAt: Date;
+  }[];
+}

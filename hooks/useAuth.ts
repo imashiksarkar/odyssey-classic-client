@@ -6,8 +6,15 @@ import { DBRes } from "@/types";
 import { use, useEffect, useMemo } from "react";
 
 const useAuth = () => {
-  const { setLoading, loading, user, setUser, setInLoggedIn, isLoggedIn } =
-    use(AuthContext);
+  const {
+    setLoading,
+    loading,
+    user,
+    setUser,
+    setInLoggedIn,
+    isLoggedIn,
+    ssoSdkKey,
+  } = use(AuthContext);
   const sdk = useMemo(() => getSdk(), []);
 
   useEffect(() => {
@@ -38,6 +45,7 @@ const useAuth = () => {
     },
     user,
     isLoggedIn,
+    ssoSdkKey,
   };
 };
 
