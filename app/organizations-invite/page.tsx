@@ -2,7 +2,6 @@
 
 import { AuthContext } from "@/app/auth-wrapper";
 import { Button } from "@/components/ui/button";
-import sso from "@/config/sso";
 import { OrganizationInvite, organizationApi } from "@/lib/organization-api";
 import useAccessToken from "@/lib/use-access-token";
 import { cn } from "@/lib/utils";
@@ -45,9 +44,6 @@ export default function OrganizationInvitePage() {
   const [pageError, setPageError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  useEffect(() => {
-    sso.fetchProfile();
-  }, []);
 
   useEffect(() => {
     const loadInvite = async () => {
@@ -160,7 +156,6 @@ export default function OrganizationInvitePage() {
             {user ? (
               <button
                 type="button"
-                onClick={sso.logout}
                 className="rounded-full p-2 text-white/70 transition hover:bg-white/8 hover:text-white"
               >
                 <LogOut className="h-4 w-4" />
@@ -252,7 +247,6 @@ export default function OrganizationInvitePage() {
             ) : (
               <div className="mt-8 space-y-3">
                 <Button
-                  onClick={() => sso.login(window.location.href)}
                   className="h-14 w-full rounded-full bg-white text-base font-semibold text-[#090d16] hover:bg-white/90"
                 >
                   Sign in to continue
