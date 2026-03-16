@@ -47,6 +47,7 @@ const AuthWrapper = ({
   const [isLoggedIn, setInLoggedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<null | Profile>(null);
+  const [e, setE] = useState(() => Date.now());
 
   const sdk = useMemo(() => getSdk(ssoSdkKey), [ssoSdkKey]);
   useEffect(() => {
@@ -59,6 +60,7 @@ const AuthWrapper = ({
       const r = await sdk?.fetchProfile();
       setInLoggedIn(!!r);
       setLoading(false);
+      setE(Date.now());
     });
   }, [sdk]);
 
@@ -90,7 +92,7 @@ const AuthWrapper = ({
 
       await fetchSdks(userId);
     });
-  }, [isLoggedIn, user, getUserId]);
+  }, [isLoggedIn, user, getUserId, e]);
 
   return (
     <AuthContext
